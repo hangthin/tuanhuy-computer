@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find C:AppServwwwtuanhuy_computer -type f \\\\\\(-name .env* -o -name *.env -o -name *config* \\\\\\))",
+      "Bash(php --version)",
+      "Bash(php:*)",
+      "Bash(mysql:*)",
+      "WebFetch(domain:api.telegram.org)",
+      "Bash(where php:*)",
+      "Bash(del \"C:\\\\AppServ\\\\www\\\\tuanhuy_computer\\\\storage\\\\telegram_offset.txt\")"
+    ]
+  }
+}

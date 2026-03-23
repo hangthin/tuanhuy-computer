@@ -1,0 +1,25 @@
+# Config chứa API keys - KHÔNG push lên GitHub
+config/app.php
+config/database.php
+
+# Storage
+storage/
+uploads/
+
+# Bot files
+storage/telegram_offset.txt
+storage/bot_log.txt
+storage/bot_service.log
+storage/bot_error.log
+
+# Windows
+*.bat
+*.vbs
+Thumbs.db
+desktop.ini
+
+# OS
+.DS_Store
+
+# Logs
+*.log
