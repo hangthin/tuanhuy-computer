@@ -97,10 +97,10 @@ $tableIcons = [
       <td style="padding:.55rem .85rem;max-width:280px">
         <?php if($oldJ || $newJ): ?>
         <div style="font-size:.7rem;line-height:1.6">
-          <?php if($oldJ): foreach($oldJ as $k=>$v): ?>
+          <?php if(is_array($oldJ)): foreach($oldJ as $k=>$v): ?>
           <div><span style="color:#ef4444">− <?= htmlspecialchars($k) ?>:</span> <span style="color:#777"><?= htmlspecialchars(substr((string)$v,0,60)) ?></span></div>
           <?php endforeach; endif; ?>
-          <?php if($newJ): foreach($newJ as $k=>$v): ?>
+          <?php if(is_array($newJ)): foreach($newJ as $k=>$v): ?>
           <div><span style="color:#4ade80">+ <?= htmlspecialchars($k) ?>:</span> <span style="color:#aaa"><?= htmlspecialchars(substr((string)$v,0,60)) ?></span></div>
           <?php endforeach; endif; ?>
         </div>
