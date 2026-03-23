@@ -1,6 +1,6 @@
-# Config chứa API keys - KHÔNG push lên GitHub
-config/app.php
-config/database.php
+# Config local - dùng getenv() cho production
+# config/app.php
+# config/database.php
 
 # Storage
 storage/
