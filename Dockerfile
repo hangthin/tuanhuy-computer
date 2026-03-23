@@ -24,7 +24,7 @@ RUN echo '<Directory /var/www/html>\n\
 
 # Entrypoint: tạo config từ env vars rồi start Apache
 COPY docker-entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN sed -i 's/\r//' /entrypoint.sh && chmod +x /entrypoint.sh
 
 # Permissions
 RUN mkdir -p storage uploads/products \
