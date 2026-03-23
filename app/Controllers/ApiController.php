@@ -996,6 +996,21 @@ category_id brand_id từ danh sách trên. Specs 5-8 thông số tiếng Việt
 
     // ── TELEGRAM BOT POLL ─────────────────────────────────────
     public function telegram($action = null) {
+        // Cron endpoint: gọi từ cron-job.org mỗi phút (không cần login, bảo vệ bằng secret)
+        if ($action === 'cron') {
+            $secret = defined('TELEGRAM_CRON_SECRET') ? TELEGRAM_CRON_SECRET : getenv('TELEGRAM_CRON_SECRET');
+            $token  = $_GET['token'] ?? $_SERVER['HTTP_X_CRON_TOKEN'] ?? '';
+            if (!$secret || $token !== $secret) {
+                http_response_code(403);
+                echo json_encode(array('ok'=>false,'message'=>'Forbidden'));
+                return;
+            }
+            require_once __DIR__ . '/../Helpers/TelegramBot.php';
+            $result = TelegramBot::poll();
+            echo json_encode($result);
+            return;
+        }
+
         if (!isAdmin()) { echo json_encode(array('ok'=>false,'message'=>'Unauthorized')); return; }
         if ($action === 'poll') {
             require_once __DIR__ . '/../Helpers/TelegramBot.php';

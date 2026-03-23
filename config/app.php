@@ -25,8 +25,9 @@ define('ZALO_ADMIN_PHONE','');  // SĐT admin (chỉ để tham chiếu, không 
 // ── Telegram Bot ──────────────────────────────────────────────────────────────
 // Hướng dẫn: nhắn @BotFather trên Telegram → /newbot → lấy token
 // Chat ID: nhắn tin cho bot rồi truy cập https://api.telegram.org/bot{TOKEN}/getUpdates
-define('TELEGRAM_BOT_TOKEN', '8723472812:AAHqJjAXt4jsKAYkY8X5lnfzhyNc6Fh0YJY');  // @TuanHuyComputerBot
-define('TELEGRAM_ADMIN_CHAT', '7329986368'); // Nh Thin — admin
+define('TELEGRAM_BOT_TOKEN',    getenv('TELEGRAM_BOT_TOKEN')    ?: '8723472812:AAHqJjAXt4jsKAYkY8X5lnfzhyNc6Fh0YJY');
+define('TELEGRAM_ADMIN_CHAT',   getenv('TELEGRAM_ADMIN_CHAT')   ?: '7329986368');
+define('TELEGRAM_CRON_SECRET',  getenv('TELEGRAM_CRON_SECRET')  ?: 'tuanhuy_cron_2024');
 
 // ── Email (SMTP) ──────────────────────────────────────────────────────────────
 // Dùng Gmail App Password: myaccount.google.com → Security → App passwords
