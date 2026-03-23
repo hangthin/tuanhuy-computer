@@ -36,17 +36,29 @@ $statusLabels = [
 
 function fmtVal($key, $val) {
     if ($val === null || $val === '') return '<span style="color:#444">—</span>';
-    $priceFields = ['price','sale_price','total','subtotal','revenue'];
+    $priceFields = ['price','sale_price','total','subtotal','revenue','shipping_fee','discount'];
     if (in_array($key, $priceFields) && is_numeric($val))
-        return '<b>' . number_format((float)$val,0,',','.') . 'đ</b>';
-    if ($key === 'is_active')  return $val ? '<span style="color:#4ade80">Hiện</span>' : '<span style="color:#f87171">Ẩn</span>';
-    if ($key === 'is_deleted') return $val ? '<span style="color:#f87171">Đã xóa</span>' : '<span style="color:#4ade80">Bình thường</span>';
-    if ($key === 'is_featured')return $val ? '<span style="color:#fbbf24">Nổi bật</span>' : 'Thường';
-    if ($key === 'role') { global $roleLabels; return $roleLabels[(int)$val] ?? $val; }
-    if (in_array($key, ['status','payment_status'])) { global $statusLabels; return $statusLabels[$val] ?? $val; }
+        return number_format((float)$val,0,',','.') . 'đ';
+    if ($key === 'is_active')
+        return $val ? '<span style="color:#4ade80">● Hiển thị</span>' : '<span style="color:#f87171">● Đang ẩn</span>';
+    if ($key === 'is_deleted')
+        return $val ? '<span style="color:#f87171">Đã xóa</span>' : '<span style="color:#4ade80">Bình thường</span>';
+    if ($key === 'is_featured')
+        return $val ? '<span style="color:#fbbf24">★ Nổi bật</span>' : 'Thường';
+    if ($key === 'role') {
+        global $roleLabels;
+        $map = [1=>'<span style="color:#e30000">Admin</span>',2=>'<span style="color:#f59e0b">Quản lý</span>',3=>'<span style="color:#3b82f6">Nhân viên</span>',0=>'Khách'];
+        return $map[(int)$val] ?? htmlspecialchars((string)$val);
+    }
+    if (in_array($key, ['status','payment_status'])) {
+        global $statusLabels;
+        return htmlspecialchars($statusLabels[$val] ?? $val);
+    }
     if ($key === 'warranty') return $val . ' tháng';
-    if ($key === 'stock' || $key === 'stock_quantity') return $val . ' cái';
-    return htmlspecialchars(mb_substr((string)$val, 0, 80, 'UTF-8'));
+    if ($key === 'stock' || $key === 'stock_quantity') return number_format((int)$val) . ' cái';
+    if ($key === 'min_stock') return number_format((int)$val) . ' cái';
+    if ($key === 'phone') return htmlspecialchars((string)$val);
+    return htmlspecialchars(mb_substr((string)$val, 0, 60, 'UTF-8'));
 }
 
 // Sinh câu mô tả hành động
@@ -291,37 +303,42 @@ $tableIcons = [
       <?php endif; ?>
     </td>
 
-    <td style="padding:.6rem .85rem;vertical-align:top;max-width:220px">
-      <?php if($changes): ?>
-      <div style="font-size:.7rem;line-height:1.7">
-        <?php foreach(array_slice($changes,0,5) as $ch):
-          $label = $fieldLabels[$ch['key']] ?? $ch['key'];
+    <td style="padding:.6rem .85rem;vertical-align:top;max-width:240px">
+      <?php
+      // Ẩn trường kỹ thuật không có nghĩa với admin
+      $hideKeys = ['slug','updated_at','created_at','deleted_at','deleted_by','image',
+                   'description','short_desc','specs','views','rating','review_count',
+                   'category_id','brand_id','is_new','sold','session_id','remember_token'];
+      $visibleChanges = array_filter($changes, function($ch) use ($hideKeys) {
+          return !in_array($ch['key'], $hideKeys);
+      });
+      $visibleChanges = array_values($visibleChanges);
+      ?>
+      <?php if($visibleChanges): ?>
+      <div style="font-size:.72rem;line-height:1.9">
+        <?php foreach(array_slice($visibleChanges,0,4) as $ch):
+          $label = isset($fieldLabels[$ch['key']]) ? $fieldLabels[$ch['key']] : $ch['key'];
+          $isUpdate = ($ch['old'] !== null && $ch['new'] !== null);
         ?>
-        <?php if($ch['old'] !== null && $ch['new'] !== null): ?>
-          <div style="display:flex;flex-wrap:wrap;gap:3px;align-items:center">
-            <span style="color:#888"><?= htmlspecialchars($label) ?>:</span>
-            <span style="color:#ef4444;text-decoration:line-through;font-size:.67rem"><?= fmtVal($ch['key'],$ch['old']) ?></span>
-            <span style="color:#555">→</span>
-            <span style="color:#4ade80"><?= fmtVal($ch['key'],$ch['new']) ?></span>
-          </div>
-        <?php elseif($ch['new'] !== null): ?>
-          <div>
-            <span style="color:#888"><?= htmlspecialchars($label) ?>:</span>
-            <span style="color:#ccc"> <?= fmtVal($ch['key'],$ch['new']) ?></span>
-          </div>
-        <?php elseif($ch['old'] !== null): ?>
-          <div>
-            <span style="color:#888"><?= htmlspecialchars($label) ?>:</span>
-            <span style="color:#ef4444;text-decoration:line-through"> <?= fmtVal($ch['key'],$ch['old']) ?></span>
-          </div>
-        <?php endif; ?>
+        <div style="display:flex;align-items:baseline;gap:4px;flex-wrap:wrap">
+          <span style="color:#555;white-space:nowrap;min-width:60px"><?= htmlspecialchars($label) ?>:</span>
+          <?php if($isUpdate): ?>
+            <span style="color:#ef4444;font-size:.68rem"><?= fmtVal($ch['key'],$ch['old']) ?></span>
+            <span style="color:#444">→</span>
+            <span style="color:#4ade80;font-weight:600"><?= fmtVal($ch['key'],$ch['new']) ?></span>
+          <?php elseif($ch['new'] !== null): ?>
+            <span style="color:#d1d5db;font-weight:600"><?= fmtVal($ch['key'],$ch['new']) ?></span>
+          <?php else: ?>
+            <span style="color:#ef4444;text-decoration:line-through"><?= fmtVal($ch['key'],$ch['old']) ?></span>
+          <?php endif; ?>
+        </div>
         <?php endforeach; ?>
-        <?php if(count($changes) > 5): ?>
-        <div style="color:#444;font-size:.65rem">+<?= count($changes)-5 ?> thay đổi khác</div>
+        <?php if(count($visibleChanges) > 4): ?>
+        <div style="color:#3b3b3b;font-size:.65rem;margin-top:2px">+<?= count($visibleChanges)-4 ?> thay đổi khác</div>
         <?php endif; ?>
       </div>
       <?php else: ?>
-      <span style="color:#333">—</span>
+      <span style="color:#2a2a2a">—</span>
       <?php endif; ?>
     </td>
 
