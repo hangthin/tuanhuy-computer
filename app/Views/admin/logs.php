@@ -95,7 +95,8 @@ function makeDescription($log, $oldJ, $newJ) {
             if (in_array('sale_price', $changed))
                 return "Cập nhật giá KM{$nameStr}: <b>" . number_format((float)$newJ['sale_price'],0,',','.') . "đ</b>";
             if (!empty($changed))
-                return "Cập nhật sản phẩm{$nameStr} (" . implode(', ', array_map(fn($k)=>$fieldLabels[$k]??$k, array_slice($changed,0,3))) . ")";
+                $labels = array_map(function($k) use ($fieldLabels){ return isset($fieldLabels[$k]) ? $fieldLabels[$k] : $k; }, array_slice($changed,0,3));
+                return "Cập nhật sản phẩm{$nameStr} (" . implode(', ', $labels) . ")";
             return "Cập nhật sản phẩm{$nameStr}";
         }
         if ($action === 'DELETE') return "🗑 Xóa sản phẩm{$nameStr}";
