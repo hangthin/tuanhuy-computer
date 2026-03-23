@@ -1,6 +1,9 @@
 Options +FollowSymLinks -Indexes
 RewriteEngine On
-RewriteBase /tuanhuy_computer/
+
+# Local: /tuanhuy_computer/ | Production (Render): /
+RewriteCond %{REQUEST_URI} ^/tuanhuy_computer/
+RewriteRule ^tuanhuy_computer/(.*)$ /tuanhuy_computer/index.php?/$1 [QSA,L]
 
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
