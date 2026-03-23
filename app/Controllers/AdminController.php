@@ -99,7 +99,10 @@ class AdminController {
                 $this->handleExtraImagesB64($pm, $id);
                 $this->handleExtraImagesPresaved($pm, $id);
 
-                Logger::update('products', $id, $oldData, array_merge($oldData, $d));
+                // Luôn lưu name để nhật ký hiển thị đúng dù name không thay đổi
+                $logOld = array_merge(['name' => $oldData['name'] ?? ''], $oldData);
+                $logNew = array_merge(['name' => $oldData['name'] ?? ''], $d);
+                Logger::log('UPDATE', 'products', $id, $logOld, $logNew);
 
                 setFlash('success', 'Cập nhật thành công!');
                 header('Location:' . APP_URL . '/admin/products'); exit;
@@ -361,9 +364,9 @@ class AdminController {
             $om->updateStatus($id, $newStatus);
 
             if ($oldOrder) {
-                Logger::update('orders', $id,
-                    ['status' => $oldOrder['status']],
-                    ['status' => $newStatus]
+                Logger::log('UPDATE', 'orders', $id,
+                    ['order_code' => $oldOrder['order_code'] ?? '', 'fullname' => $oldOrder['fullname'] ?? '', 'status' => $oldOrder['status']],
+                    ['order_code' => $oldOrder['order_code'] ?? '', 'fullname' => $oldOrder['fullname'] ?? '', 'status' => $newStatus]
                 );
             }
             try {
@@ -404,13 +407,14 @@ class AdminController {
         if ($action === 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $pid    = (int)($_POST['product_id'] ?? 0);
             $qty    = (int)($_POST['quantity']    ?? 0);
-            $oldRow = $db->fetch("SELECT stock_quantity FROM inventory WHERE product_id=?", [$pid]);
+            $oldRow  = $db->fetch("SELECT stock_quantity FROM inventory WHERE product_id=?", [$pid]);
+            $product = $db->fetch("SELECT name FROM products WHERE id=?", [$pid]);
             $db->query("UPDATE inventory SET stock_quantity=?,last_restocked=NOW() WHERE product_id=?", [$qty, $pid]);
             $db->query("UPDATE products SET stock=? WHERE id=?", [$qty, $pid]);
             if ($oldRow) {
-                Logger::update('inventory', $pid,
-                    ['stock_quantity' => $oldRow['stock_quantity']],
-                    ['stock_quantity' => $qty]
+                Logger::log('UPDATE', 'inventory', $pid,
+                    ['product_name' => $product['name'] ?? '', 'stock_quantity' => $oldRow['stock_quantity']],
+                    ['product_name' => $product['name'] ?? '', 'stock_quantity' => $qty]
                 );
             }
             setFlash('success', 'Đã cập nhật kho!');

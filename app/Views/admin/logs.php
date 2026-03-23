@@ -59,91 +59,107 @@ function makeDescription($log, $oldJ, $newJ) {
     // Bỏ qua bản ghi nội bộ của bot
     if ($action === 'TG_OFFSET') return null;
 
-    $name = '';
-    if (is_array($newJ) && !empty($newJ['name']))     $name = $newJ['name'];
-    if (!$name && is_array($oldJ) && !empty($oldJ['name'])) $name = $oldJ['name'];
-    if (!$name && is_array($newJ) && !empty($newJ['fullname'])) $name = $newJ['fullname'];
-    if (!$name && is_array($oldJ) && !empty($oldJ['fullname'])) $name = $oldJ['fullname'];
-    if (!$name && is_array($newJ) && !empty($newJ['email']))    $name = $newJ['email'];
-
+    // Trích tên từ dữ liệu log (ưu tiên new, fallback old)
+    $extractName = function($j, $keys = ['name','fullname','product_name','email']) {
+        if (!is_array($j)) return '';
+        foreach ($keys as $k) { if (!empty($j[$k])) return $j[$k]; }
+        return '';
+    };
+    $name    = $extractName($newJ) ?: $extractName($oldJ);
     $nameStr = $name ? ' <b>' . htmlspecialchars(mb_substr($name,0,50,'UTF-8')) . '</b>' : ($id ? " #$id" : '');
 
-    // products
+    // ── products ────────────────────────────────────────────────
     if ($table === 'products') {
         if ($action === 'CREATE') {
-            $price = is_array($newJ) && isset($newJ['price']) ? ' — ' . number_format((float)$newJ['price'],0,',','.') . 'đ' : '';
+            $price = isset($newJ['price']) ? ' — ' . number_format((float)$newJ['price'],0,',','.') . 'đ' : '';
             return "Thêm sản phẩm{$nameStr}{$price}";
         }
         if ($action === 'UPDATE') {
-            if (is_array($newJ) && array_keys($newJ) === ['is_deleted'] && $newJ['is_deleted'] == 0)
+            if (is_array($newJ) && isset($newJ['is_deleted']) && $newJ['is_deleted'] == 0 && (!isset($newJ['name']) || count(array_diff_key($newJ,['is_deleted'=>1,'name'=>1])) === 0))
                 return "Khôi phục sản phẩm{$nameStr}";
-            if (is_array($newJ) && isset($newJ['status']))
-                return "Đổi trạng thái SP{$nameStr}: <b>{$newJ['status']}</b>";
             if (is_array($newJ) && isset($newJ['is_active']))
-                return ($newJ['is_active'] ? 'Hiện' : 'Ẩn') . " sản phẩm{$nameStr}";
-            if (is_array($newJ) && isset($newJ['price']))
-                return "Cập nhật giá sản phẩm{$nameStr}: <b>" . number_format((float)$newJ['price'],0,',','.') . "đ</b>";
+                return ($newJ['is_active'] ? '👁 Hiển thị' : '🙈 Ẩn') . " sản phẩm{$nameStr}";
+            if (is_array($newJ) && isset($newJ['is_featured']))
+                return ($newJ['is_featured'] ? '⭐ Đặt nổi bật' : 'Bỏ nổi bật') . " sản phẩm{$nameStr}";
+            // Xây danh sách trường đã đổi (loại trừ name vì chỉ là context)
+            $changed = [];
+            if (is_array($newJ)) foreach ($newJ as $k=>$v) { if ($k !== 'name' && (!is_array($oldJ) || !isset($oldJ[$k]) || (string)$oldJ[$k] !== (string)$v)) $changed[] = $k; }
+            if (in_array('price', $changed))
+                return "Cập nhật giá{$nameStr}: <b>" . number_format((float)$newJ['price'],0,',','.') . "đ</b>";
+            if (in_array('stock', $changed)) {
+                $oldQ = $oldJ['stock'] ?? '?'; $newQ = $newJ['stock'];
+                $diff = is_numeric($newQ) && is_numeric($oldQ) ? $newQ-$oldQ : null;
+                $diffStr = $diff !== null ? (' (' . ($diff>0?"<span style='color:#4ade80'>+$diff</span>":"<span style='color:#f87171'>$diff</span>") . ')') : '';
+                return "Cập nhật tồn kho{$nameStr}: {$oldQ} → <b>{$newQ}</b>{$diffStr}";
+            }
+            if (in_array('sale_price', $changed))
+                return "Cập nhật giá KM{$nameStr}: <b>" . number_format((float)$newJ['sale_price'],0,',','.') . "đ</b>";
+            if (!empty($changed))
+                return "Cập nhật sản phẩm{$nameStr} (" . implode(', ', array_map(fn($k)=>$fieldLabels[$k]??$k, array_slice($changed,0,3))) . ")";
             return "Cập nhật sản phẩm{$nameStr}";
         }
-        if ($action === 'DELETE') return "Xóa sản phẩm{$nameStr}";
+        if ($action === 'DELETE') return "🗑 Xóa sản phẩm{$nameStr}";
     }
 
-    // orders
+    // ── orders ──────────────────────────────────────────────────
     if ($table === 'orders') {
-        if ($action === 'UPDATE') {
-            if (is_array($newJ) && isset($newJ['status'])) {
-                $oldS = (is_array($oldJ) && isset($oldJ['status'])) ? ($statusLabels[$oldJ['status']] ?? $oldJ['status']) : '';
-                $newS = $statusLabels[$newJ['status']] ?? $newJ['status'];
-                $arrow = $oldS ? " <span style='color:#555'>$oldS</span> → <b>$newS</b>" : " → <b>$newS</b>";
-                return "Cập nhật đơn hàng #$id{$arrow}";
-            }
-            return "Cập nhật đơn hàng #$id";
+        // Lấy order_code và tên khách từ log (đã lưu kể từ fix mới)
+        $orderCode = (is_array($newJ) && !empty($newJ['order_code'])) ? $newJ['order_code'] : (is_array($oldJ) && !empty($oldJ['order_code']) ? $oldJ['order_code'] : null);
+        $custName  = (is_array($newJ) && !empty($newJ['fullname']))   ? $newJ['fullname']   : (is_array($oldJ) && !empty($oldJ['fullname'])   ? $oldJ['fullname']   : null);
+        $orderRef  = $orderCode ? " <b>#{$orderCode}</b>" : " #$id";
+        $custStr   = $custName  ? " — " . htmlspecialchars(mb_substr($custName,0,25,'UTF-8')) : '';
+
+        if ($action === 'UPDATE' && is_array($newJ) && isset($newJ['status'])) {
+            $oldS   = (is_array($oldJ) && isset($oldJ['status'])) ? ($statusLabels[$oldJ['status']] ?? $oldJ['status']) : null;
+            $newS   = $statusLabels[$newJ['status']] ?? $newJ['status'];
+            $arrow  = $oldS ? "<span style='color:#6b7280'>{$oldS}</span> → <b>{$newS}</b>" : "→ <b>{$newS}</b>";
+            return "Cập nhật đơn{$orderRef}{$custStr}: {$arrow}";
         }
-        if ($action === 'CREATE') return "Tạo đơn hàng #$id{$nameStr}";
-        if ($action === 'DELETE') return "Xóa đơn hàng #$id";
+        if ($action === 'CREATE') return "Tạo đơn hàng{$orderRef}{$custStr}";
+        if ($action === 'DELETE') return "🗑 Xóa đơn hàng{$orderRef}";
+        return "Cập nhật đơn hàng{$orderRef}";
     }
 
-    // users
+    // ── users ───────────────────────────────────────────────────
     if ($table === 'users') {
-        if ($action === 'LOGIN')  return "Đăng nhập" . ($name ? " — <b>{$name}</b>" : '');
-        if ($action === 'LOGOUT') return "Đăng xuất" . ($name ? " — <b>{$name}</b>" : '');
-        if ($action === 'CREATE') return "Tạo tài khoản{$nameStr}";
+        if ($action === 'LOGIN')  return "🔑 Đăng nhập" . ($name ? " — <b>" . htmlspecialchars($name) . "</b>" : '');
+        if ($action === 'LOGOUT') return "🚪 Đăng xuất" . ($name ? " — <b>" . htmlspecialchars($name) . "</b>" : '');
+        if ($action === 'CREATE') return "➕ Tạo tài khoản{$nameStr}";
         if ($action === 'UPDATE') {
             if (is_array($newJ) && isset($newJ['is_active']))
                 return ($newJ['is_active'] ? '🔓 Mở khóa' : '🔒 Khóa') . " tài khoản{$nameStr}";
-            if (is_array($newJ) && isset($newJ['role'])) {
-                $roleStr = $roleLabels[(int)$newJ['role']] ?? $newJ['role'];
-                return "Đổi vai trò{$nameStr} → <b>$roleStr</b>";
-            }
+            if (is_array($newJ) && isset($newJ['role']))
+                return "Đổi vai trò{$nameStr} → <b>" . ($roleLabels[(int)$newJ['role']] ?? $newJ['role']) . "</b>";
             if (is_array($newJ) && isset($newJ['note']) && $newJ['note'] === 'password_reset')
-                return "Đặt lại mật khẩu{$nameStr}";
+                return "🔑 Đặt lại mật khẩu{$nameStr}";
             return "Cập nhật tài khoản{$nameStr}";
         }
-        if ($action === 'DELETE') return "Xóa tài khoản{$nameStr}";
+        if ($action === 'DELETE') return "🗑 Xóa tài khoản{$nameStr}";
     }
 
-    // inventory
+    // ── inventory ───────────────────────────────────────────────
     if ($table === 'inventory') {
-        if ($action === 'UPDATE') {
-            $oldQ = is_array($oldJ) && isset($oldJ['stock_quantity']) ? (int)$oldJ['stock_quantity'] : null;
-            $newQ = is_array($newJ) && isset($newJ['stock_quantity']) ? (int)$newJ['stock_quantity'] : null;
-            if ($oldQ !== null && $newQ !== null) {
-                $diff = $newQ - $oldQ;
-                $arrow = $diff > 0 ? "<span style='color:#4ade80'>+$diff</span>" : "<span style='color:#f87171'>$diff</span>";
-                return "Cập nhật tồn kho SP #$id: {$oldQ} → <b>{$newQ}</b> ({$arrow})";
-            }
-            return "Cập nhật tồn kho SP #$id";
+        $pName = (is_array($newJ) && !empty($newJ['product_name'])) ? $newJ['product_name']
+               : ((is_array($oldJ) && !empty($oldJ['product_name'])) ? $oldJ['product_name'] : null);
+        $pStr  = $pName ? ' <b>' . htmlspecialchars(mb_substr($pName,0,45,'UTF-8')) . '</b>' : " #$id";
+        $oldQ  = is_array($oldJ) && isset($oldJ['stock_quantity']) ? (int)$oldJ['stock_quantity'] : null;
+        $newQ  = is_array($newJ) && isset($newJ['stock_quantity']) ? (int)$newJ['stock_quantity'] : null;
+        if ($oldQ !== null && $newQ !== null) {
+            $diff    = $newQ - $oldQ;
+            $diffStr = $diff > 0 ? "<span style='color:#4ade80'>+{$diff}</span>" : "<span style='color:#f87171'>{$diff}</span>";
+            return "📦 Điều chỉnh tồn kho{$pStr}: {$oldQ} → <b>{$newQ}</b> ({$diffStr})";
         }
+        return "📦 Cập nhật tồn kho{$pStr}";
     }
 
-    // categories
+    // ── categories ──────────────────────────────────────────────
     if ($table === 'categories') {
         if ($action === 'CREATE') return "Thêm danh mục{$nameStr}";
         if ($action === 'UPDATE') return "Cập nhật danh mục{$nameStr}";
-        if ($action === 'DELETE') return "Xóa danh mục{$nameStr}";
+        if ($action === 'DELETE') return "🗑 Xóa danh mục{$nameStr}";
     }
 
-    // Generic fallback
+    // Fallback chung
     $actionVi = ['CREATE'=>'Thêm','UPDATE'=>'Cập nhật','DELETE'=>'Xóa','LOGIN'=>'Đăng nhập','LOGOUT'=>'Đăng xuất'];
     return ($actionVi[$action] ?? $action) . " {$table}{$nameStr}";
 }
@@ -216,10 +232,12 @@ $tableIcons = [
     $desc = makeDescription($log, $oldJ, $newJ);
     if ($desc === null) continue;
 
-    // Tính diff để hiển thị chi tiết thay đổi
+    // Tính diff để hiển thị chi tiết thay đổi (bỏ qua các field context-only)
+    $contextKeys = ['name', 'product_name', 'order_code', 'fullname'];
     $changes = [];
     if ($ac === 'UPDATE' && is_array($oldJ) && is_array($newJ)) {
         foreach ($newJ as $k => $v) {
+            if (in_array($k, $contextKeys)) continue;
             $oldV = $oldJ[$k] ?? null;
             if ((string)$oldV !== (string)$v) {
                 $changes[] = ['key'=>$k,'old'=>$oldV,'new'=>$v];
