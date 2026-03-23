@@ -337,9 +337,49 @@ class AdminController {
             header('Location:' . APP_URL . '/admin/customers'); exit;
         }
 
-        $customers       = $um->getAll($search, $page);
-        $totalCustomers  = $um->count($search);
-        $totalPagesAdmin = (int)ceil($totalCustomers / 20);
+        $status          = $_GET['status'] ?? '';
+        $db              = Database::getInstance();
+
+        // Thống kê tổng quan
+        $custStats = $db->fetch(
+            "SELECT
+               COUNT(*) AS total,
+               SUM(is_active=1) AS active,
+               SUM(is_active=0) AS locked,
+               SUM(DATE(created_at)=CURDATE()) AS today
+             FROM users WHERE role=0"
+        );
+
+        // Query khách hàng kèm số đơn + tổng chi tiêu + đơn gần nhất
+        $where  = ['u.role=0'];
+        $params = [];
+        if ($search) {
+            $where[]  = '(u.fullname LIKE ? OR u.email LIKE ? OR u.phone LIKE ?)';
+            $params[] = "%{$search}%";
+            $params[] = "%{$search}%";
+            $params[] = "%{$search}%";
+        }
+        if ($status === 'active')  { $where[] = 'u.is_active=1'; }
+        if ($status === 'locked')  { $where[] = 'u.is_active=0'; }
+        $ws     = implode(' AND ', $where);
+        $limit  = 20;
+        $offset = ($page - 1) * $limit;
+
+        $customers = $db->fetchAll(
+            "SELECT u.*,
+                    COUNT(DISTINCT o.id)                        AS order_count,
+                    COALESCE(SUM(o.total),0)                    AS total_spent,
+                    MAX(o.created_at)                           AS last_order_at
+             FROM users u
+             LEFT JOIN orders o ON o.user_id=u.id AND o.is_deleted=0 AND o.status != 'cancelled'
+             WHERE {$ws}
+             GROUP BY u.id
+             ORDER BY u.created_at DESC
+             LIMIT {$limit} OFFSET {$offset}",
+            $params
+        );
+        $totalCustomers  = (int)$db->query("SELECT COUNT(*) FROM users u WHERE {$ws}", $params)->fetchColumn();
+        $totalPagesAdmin = (int)ceil($totalCustomers / $limit);
         $pageTitle       = 'Quản lý khách hàng';
         include __DIR__.'/../Views/admin/customers.php';
     }
