@@ -3,6 +3,7 @@ FROM php:8.1-apache
 # Install extensions
 RUN apt-get update && apt-get install -y \
     libpng-dev libjpeg-dev libzip-dev libonig-dev \
+    libcurl4-openssl-dev libssl-dev \
     && docker-php-ext-install pdo_mysql curl mbstring gd zip \
     && a2enmod rewrite headers \
     && rm -rf /var/lib/apt/lists/*
