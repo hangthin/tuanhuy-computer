@@ -39,7 +39,9 @@
       "Read(//c/AppServ/**)",
       "Read(//c/AppServ/Apache24/logs/**)",
       "Bash(curl -s \"http://localhost/tuanhuy_computer/admin/logs\" -c /tmp/cookies.txt -L)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(git -C C:/AppServ/www/tuanhuy_computer status)",
+      "Bash(git -C C:/AppServ/www/tuanhuy_computer diff --stat)"
     ]
   }
 }

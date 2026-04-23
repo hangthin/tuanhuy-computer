@@ -694,21 +694,28 @@ class TelegramBotController {
             $period = $params['period'] ?? 'today';
             $db     = $this->db;
 
+            $nowVN = "CONVERT_TZ(NOW(),'+00:00','+07:00')";
             if ($period === 'week') {
-                $where = "created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)";
-                $label = "7 ngày qua";
+                $whereOrders = "CONVERT_TZ(orders.created_at,'+00:00','+07:00') >= DATE_SUB({$nowVN}, INTERVAL 7 DAY)";
+                $whereUsers  = "CONVERT_TZ(users.created_at,'+00:00','+07:00') >= DATE_SUB({$nowVN}, INTERVAL 7 DAY)";
+                $whereO      = "CONVERT_TZ(o.created_at,'+00:00','+07:00') >= DATE_SUB({$nowVN}, INTERVAL 7 DAY)";
+                $label       = "7 ngày qua";
             } elseif ($period === 'month') {
-                $where = "YEAR(created_at)=YEAR(NOW()) AND MONTH(created_at)=MONTH(NOW())";
-                $label = "Tháng này";
+                $whereOrders = "YEAR(CONVERT_TZ(orders.created_at,'+00:00','+07:00'))=YEAR({$nowVN}) AND MONTH(CONVERT_TZ(orders.created_at,'+00:00','+07:00'))=MONTH({$nowVN})";
+                $whereUsers  = "YEAR(CONVERT_TZ(users.created_at,'+00:00','+07:00'))=YEAR({$nowVN}) AND MONTH(CONVERT_TZ(users.created_at,'+00:00','+07:00'))=MONTH({$nowVN})";
+                $whereO      = "YEAR(CONVERT_TZ(o.created_at,'+00:00','+07:00'))=YEAR({$nowVN}) AND MONTH(CONVERT_TZ(o.created_at,'+00:00','+07:00'))=MONTH({$nowVN})";
+                $label       = "Tháng này";
             } else {
-                $where = "DATE(created_at)=CURDATE()";
-                $label = "Hôm nay";
+                $whereOrders = "DATE(CONVERT_TZ(orders.created_at,'+00:00','+07:00'))=CURDATE()";
+                $whereUsers  = "DATE(CONVERT_TZ(users.created_at,'+00:00','+07:00'))=CURDATE()";
+                $whereO      = "DATE(CONVERT_TZ(o.created_at,'+00:00','+07:00'))=CURDATE()";
+                $label       = "Hôm nay";
             }
 
-            $rev  = $db->fetch("SELECT COALESCE(SUM(total),0) AS r, COUNT(*) AS c FROM orders WHERE {$where} AND status!='cancelled' AND is_deleted=0");
+            $rev  = $db->fetch("SELECT COALESCE(SUM(total),0) AS r, COUNT(*) AS c FROM orders WHERE {$whereOrders} AND status!='cancelled' AND is_deleted=0");
             $pend = (int)$db->query("SELECT COUNT(*) FROM orders WHERE status='pending' AND is_deleted=0")->fetchColumn();
-            $newU = $db->fetch("SELECT COUNT(*) AS c FROM users WHERE role=0 AND {$where}");
-            $topP = $db->fetchAll("SELECT p.name, SUM(od.quantity) AS sold FROM order_details od JOIN products p ON p.id=od.product_id JOIN orders o ON o.id=od.order_id WHERE {$where} AND o.is_deleted=0 GROUP BY p.id ORDER BY sold DESC LIMIT 3");
+            $newU = $db->fetch("SELECT COUNT(*) AS c FROM users WHERE role=0 AND {$whereUsers}");
+            $topP = $db->fetchAll("SELECT p.name, SUM(od.quantity) AS sold FROM order_details od JOIN products p ON p.id=od.product_id JOIN orders o ON o.id=od.order_id WHERE {$whereO} AND o.is_deleted=0 GROUP BY p.id ORDER BY sold DESC LIMIT 3");
 
             $esc = function($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); };
 

@@ -151,7 +151,7 @@ class TelegramBot {
     }
 
     // ─────────────────────────────────────────────────────────────────
-    private static function dispatch($chatId, $text) {
+    public static function dispatch($chatId, $text) {
         $t = mb_strtolower(trim($text), 'UTF-8');
         if (strlen($t) > 0 && $t[0] === '/') $t = substr($t, 1);
 
@@ -205,6 +205,10 @@ class TelegramBot {
             return self::cmdLock($chatId, trim($m[2]), true);
         if (preg_match('/^(mở khóa|mo khoa|mở|mo)\s+(.+)/iu', $text, $m))
             return self::cmdLock($chatId, trim($m[2]), false);
+
+        // Xác nhận DELETE: "ok xóa [lệnh gốc]"
+        if (preg_match('/^ok\s*xóa\s+(.+)/iu', $text, $m))
+            return self::cmdAI($chatId, trim($m[1]), true);
 
         // AI fallback
         return self::cmdAI($chatId, $text);
@@ -509,46 +513,155 @@ class TelegramBot {
         return self::reply($chatId, $msg);
     }
 
-    private static function cmdAI($chatId, $text) {
-        try {
-            $apiKey = defined('AI_API_KEY') ? AI_API_KEY : '';
-            if (!$apiKey) return self::reply($chatId, '❌ AI chưa cấu hình API key.');
+    // $deleteConfirmed = true khi user đã xác nhận "ok xóa ..."
+    private static function cmdAI($chatId, $text, $deleteConfirmed = false) {
+        $apiKey = defined('ANTHROPIC_API_KEY') ? ANTHROPIC_API_KEY : '';
+        if (!$apiKey) return self::cmdAIGroq($chatId, $text);
 
-            $site = defined('APP_NAME') ? APP_NAME : 'shop';
-            $ch   = curl_init('https://api.groq.com/openai/v1/chat/completions');
+        require_once __DIR__ . '/AITools.php';
+
+        $site   = defined('APP_NAME') ? APP_NAME : 'shop';
+        $actor  = $chatId === 'web' ? 'WebChat' : 'TelegramBot';
+        $system = "Bạn là trợ lý admin của {$site} — cửa hàng máy tính. "
+                . "Bạn có thể truy vấn và cập nhật database MySQL qua các tools. "
+                . "Luôn trả lời ngắn gọn bằng tiếng Việt, tối đa 400 từ. "
+                . "Dùng query_db để đọc dữ liệu, execute_db để ghi, get_schema khi không biết cấu trúc bảng.";
+
+        $messages = array(array('role' => 'user', 'content' => $text));
+
+        // Vòng lặp agentic — tối đa 5 lượt tool_use
+        for ($turn = 0; $turn < 5; $turn++) {
+            $payload = array(
+                'model'      => 'claude-sonnet-4-20250514',
+                'max_tokens' => 1024,
+                'system'     => $system,
+                'tools'      => AITools::getToolDefinitions(),
+                'messages'   => $messages,
+            );
+
+            $ch = curl_init('https://api.anthropic.com/v1/messages');
             curl_setopt_array($ch, array(
                 CURLOPT_POST           => true,
-                CURLOPT_POSTFIELDS     => json_encode(array(
-                    'model'       => 'llama-3.3-70b-versatile',
-                    'messages'    => array(
-                        array('role'=>'system','content'=>"Bạn là trợ lý admin của {$site}. Trả lời ngắn gọn, súc tích bằng tiếng Việt, tối đa 300 từ."),
-                        array('role'=>'user','content'=>$text),
-                    ),
-                    'max_tokens'  => 400,
-                    'temperature' => 0.6,
-                )),
+                CURLOPT_POSTFIELDS     => json_encode($payload, JSON_UNESCAPED_UNICODE),
                 CURLOPT_HTTPHEADER     => array(
-                    'Authorization: Bearer ' . $apiKey,
-                    'Content-Type: application/json',
+                    'x-api-key: ' . $apiKey,
+                    'anthropic-version: 2023-06-01',
+                    'content-type: application/json',
                 ),
                 CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT        => 20,
+                CURLOPT_TIMEOUT        => 30,
                 CURLOPT_SSL_VERIFYPEER => false,
             ));
             $res  = curl_exec($ch);
+            $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
-            $data  = json_decode($res, true);
-            $reply = $data['choices'][0]['message']['content'] ?? '';
-            if (!$reply) return self::reply($chatId, '🤔 AI không trả lời được. Thử lại sau.');
-            return self::reply($chatId, '🤖 ' . trim($reply));
-        } catch (Exception $e) {
-            return self::reply($chatId, '❌ Lỗi AI: ' . $e->getMessage());
+
+            if ($code !== 200) return self::cmdAIGroq($chatId, $text);
+
+            $data = json_decode($res, true);
+            if (empty($data['content'])) break;
+
+            if ($data['stop_reason'] === 'end_turn') {
+                $out = '';
+                foreach ($data['content'] as $block) {
+                    if ($block['type'] === 'text') $out .= $block['text'];
+                }
+                return self::reply($chatId, '🤖 ' . trim($out));
+            }
+
+            if ($data['stop_reason'] !== 'tool_use') break;
+
+            // Thêm lượt assistant vào lịch sử
+            $messages[] = array('role' => 'assistant', 'content' => $data['content']);
+
+            $toolResults = array();
+            foreach ($data['content'] as $block) {
+                if ($block['type'] !== 'tool_use') continue;
+
+                $name   = $block['name'];
+                $input  = $block['input'];
+                $sql    = isset($input['sql'])    ? $input['sql']    : '';
+                $params = isset($input['params']) ? $input['params'] : array();
+
+                switch ($name) {
+                    case 'query_db':
+                        $result = AITools::queryDb($sql, $params);
+                        break;
+
+                    case 'execute_db':
+                        // DELETE qua Telegram cần xác nhận lần đầu
+                        if (preg_match('/^\s*DELETE\s/i', $sql)
+                            && $chatId !== 'web'
+                            && !$deleteConfirmed) {
+                            $result = json_encode(array(
+                                'pending_confirmation' => true,
+                                'instruction' => 'DELETE cần xác nhận. Yêu cầu người dùng gõ: ok xóa [yêu cầu ban đầu]',
+                            ));
+                        } else {
+                            $result = AITools::executeDb($sql, $params, $actor);
+                        }
+                        break;
+
+                    case 'get_schema':
+                        $result = AITools::getSchema();
+                        break;
+
+                    default:
+                        $result = json_encode(array('error' => 'Tool không xác định: ' . $name));
+                }
+
+                $toolResults[] = array(
+                    'type'        => 'tool_result',
+                    'tool_use_id' => $block['id'],
+                    'content'     => $result,
+                );
+            }
+
+            $messages[] = array('role' => 'user', 'content' => $toolResults);
         }
+
+        return self::reply($chatId, '⚠️ AI không hoàn thành được yêu cầu. Thử lại sau.');
+    }
+
+    // Groq fallback khi không có ANTHROPIC_API_KEY hoặc Claude trả lỗi
+    private static function cmdAIGroq($chatId, $text) {
+        $apiKey = defined('AI_API_KEY') ? AI_API_KEY : '';
+        if (!$apiKey) return self::reply($chatId, '❌ AI chưa cấu hình API key.');
+
+        $site = defined('APP_NAME') ? APP_NAME : 'shop';
+        $ch   = curl_init('https://api.groq.com/openai/v1/chat/completions');
+        curl_setopt_array($ch, array(
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => json_encode(array(
+                'model'       => 'llama-3.3-70b-versatile',
+                'messages'    => array(
+                    array('role' => 'system', 'content' => "Bạn là trợ lý admin của {$site}. Trả lời ngắn gọn bằng tiếng Việt, tối đa 300 từ."),
+                    array('role' => 'user',   'content' => $text),
+                ),
+                'max_tokens'  => 400,
+                'temperature' => 0.6,
+            )),
+            CURLOPT_HTTPHEADER     => array(
+                'Authorization: Bearer ' . $apiKey,
+                'Content-Type: application/json',
+            ),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 20,
+            CURLOPT_SSL_VERIFYPEER => false,
+        ));
+        $res   = curl_exec($ch);
+        curl_close($ch);
+        $data  = json_decode($res, true);
+        $reply = isset($data['choices'][0]['message']['content']) ? $data['choices'][0]['message']['content'] : '';
+        if (!$reply) return self::reply($chatId, '🤔 AI không trả lời được. Thử lại sau.');
+        return self::reply($chatId, '🤖 ' . trim($reply));
     }
 
     private static function reply($chatId, $text) {
-        require_once __DIR__ . '/TelegramNotifier.php';
-        TelegramNotifier::send($chatId, $text);
+        if ($chatId !== 'web') {
+            require_once __DIR__ . '/TelegramNotifier.php';
+            TelegramNotifier::send($chatId, $text);
+        }
         return $text;
     }
 }

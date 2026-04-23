@@ -199,11 +199,19 @@ class AIInsight {
              . "Ngắn gọn, rõ ràng, dùng emoji, tối đa 350 từ.";
     }
 
-    // ── Groq call ────────────────────────────────────────────────────
+    // ── AI call: Claude → Groq fallback ──────────────────────────────
 
     public static function callGroq($prompt, $maxTokens = 1500) {
-        $apiKey = defined('AI_API_KEY') && AI_API_KEY ? AI_API_KEY : '';
-        if (!$apiKey) return 'Chưa cấu hình AI_API_KEY.';
+        // 1. Thử Claude trước
+        $claudeKey = defined('ANTHROPIC_API_KEY') && ANTHROPIC_API_KEY ? ANTHROPIC_API_KEY : '';
+        if ($claudeKey) {
+            $result = self::callClaude($prompt, $maxTokens, $claudeKey);
+            if ($result !== null) return $result;
+        }
+
+        // 2. Fallback Groq
+        $groqKey = defined('AI_API_KEY') && AI_API_KEY ? AI_API_KEY : '';
+        if (!$groqKey) return '⚠️ Chưa cấu hình ANTHROPIC_API_KEY hoặc AI_API_KEY.';
 
         $messages = array(
             array('role' => 'system', 'content' =>
@@ -212,9 +220,7 @@ class AIInsight {
             array('role' => 'user', 'content' => $prompt),
         );
 
-        $models = array('llama-3.3-70b-versatile', 'mixtral-8x7b-32768');
-
-        foreach ($models as $model) {
+        foreach (array('llama-3.3-70b-versatile', 'mixtral-8x7b-32768') as $model) {
             $ch = curl_init('https://api.groq.com/openai/v1/chat/completions');
             curl_setopt_array($ch, array(
                 CURLOPT_POST           => true,
@@ -223,7 +229,7 @@ class AIInsight {
                 CURLOPT_SSL_VERIFYPEER => false,
                 CURLOPT_HTTPHEADER     => array(
                     'Content-Type: application/json',
-                    'Authorization: Bearer ' . $apiKey,
+                    'Authorization: Bearer ' . $groqKey,
                 ),
                 CURLOPT_POSTFIELDS => json_encode(array(
                     'model'       => $model,
@@ -242,9 +248,42 @@ class AIInsight {
                     return trim($data['choices'][0]['message']['content']);
                 }
             }
-            if ($code === 401 || $code === 403) break; // sai key
+            if ($code === 401 || $code === 403) break;
         }
 
-        return '❌ Không thể kết nối AI. Kiểm tra AI_API_KEY và thử lại.';
+        return '❌ Không thể kết nối AI. Kiểm tra API key và thử lại.';
+    }
+
+    // Claude API call (không dùng tools, chỉ text)
+    private static function callClaude($prompt, $maxTokens, $apiKey) {
+        $payload = array(
+            'model'      => 'claude-sonnet-4-20250514',
+            'max_tokens' => $maxTokens,
+            'system'     => 'Bạn là trợ lý phân tích quản trị cho cửa hàng máy tính Tuấn Huy Computer. '
+                          . 'Luôn trả lời bằng tiếng Việt, ngắn gọn, thực tế, dùng emoji phù hợp.',
+            'messages'   => array(array('role' => 'user', 'content' => $prompt)),
+        );
+
+        $ch = curl_init('https://api.anthropic.com/v1/messages');
+        curl_setopt_array($ch, array(
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => json_encode($payload, JSON_UNESCAPED_UNICODE),
+            CURLOPT_HTTPHEADER     => array(
+                'x-api-key: ' . $apiKey,
+                'anthropic-version: 2023-06-01',
+                'content-type: application/json',
+            ),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 40,
+            CURLOPT_SSL_VERIFYPEER => false,
+        ));
+        $resp = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($code !== 200) return null;
+        $data = json_decode($resp, true);
+        if (isset($data['content'][0]['text'])) return trim($data['content'][0]['text']);
+        return null;
     }
 }
