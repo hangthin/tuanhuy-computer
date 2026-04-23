@@ -52,7 +52,7 @@ class Logger {
                     $userId,
                     $userName,
                     $role,
-                    strtoupper($action),
+                    $action,
                     $table,
                     $targetId,
                     $oldData !== null ? json_encode($oldData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
@@ -72,16 +72,28 @@ class Logger {
         self::log('CREATE', $table, $id, null, $data);
     }
 
-    public static function update(string $table, int $id, array $old, array $new): void {
+    public static function update(string $table, int $id, array $old, array $new, array $context = []): void {
         // Only log if something actually changed
         $diff = self::diff($old, $new);
         if (!empty($diff['old']) || !empty($diff['new'])) {
-            self::log('UPDATE', $table, $id, $diff['old'], $diff['new']);
+            // Context fields (e.g. name/fullname) are always stored in both sides
+            // so the log viewer can display who/what was affected even if those fields didn't change.
+            $logOld = !empty($context) ? array_merge($context, $diff['old']) : $diff['old'];
+            $logNew = !empty($context) ? array_merge($context, $diff['new']) : $diff['new'];
+            self::log('UPDATE', $table, $id, $logOld, $logNew);
         }
     }
 
     public static function delete(string $table, int $id, array $old): void {
         self::log('DELETE', $table, $id, $old, null);
+    }
+
+    /**
+     * Log a named image/processing activity.
+     * $type: 'IMG_UPDATE' | 'IMG_REMOVE_BG' | 'IMG_LOGO' | 'IMG_EXTRA_ADD' | 'IMG_DELETE'
+     */
+    public static function logActivity(string $type, string $table, ?int $targetId = null, array $data = []): void {
+        self::log($type, $table, $targetId, null, !empty($data) ? $data : null);
     }
 
     // ── Fetch helpers (for admin log viewer) ────────────────

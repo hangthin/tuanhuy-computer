@@ -1,20 +1,47 @@
 <?php
 // config/app.php
-define('APP_URL',        'http://localhost/tuanhuy_computer');
+
+// ── Load .env.local (local development overrides) ─────────────────────────────
+$_envFile = __DIR__ . '/../.env.local';
+if (file_exists($_envFile)) {
+    foreach (file($_envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $_envLine) {
+        if ($_envLine === '' || $_envLine[0] === '#' || strpos($_envLine, '=') === false) continue;
+        list($_envK, $_envV) = explode('=', $_envLine, 2);
+        $_envK = trim($_envK); $_envV = trim($_envV);
+        if ($_envK !== '' && getenv($_envK) === false) putenv("$_envK=$_envV");
+    }
+    unset($_envFile, $_envLine, $_envK, $_envV);
+}
+
+define('APP_URL',        getenv('APP_URL') ?: 'http://localhost/tuanhuy_computer');
 define('APP_NAME',       'Tuấn Huy Computer');
 define('UPLOAD_PATH',    __DIR__ . '/../uploads/products/');
 define('UPLOAD_URL',     APP_URL . '/uploads/products/');
 define('ITEMS_PER_PAGE', 12);
-define('AI_API_KEY',       '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');  // Groq API key - console.groq.com
+define('AI_API_KEY',       getenv('AI_API_KEY')       ?: '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');
 define('AI_ACCOUNT_ID',   '');
-define('AI_MODEL', 'llama-3.2-11b-vision-preview');  // Groq vision model
-define('BING_SEARCH_KEY',    '');  // Bing Image Search — portal.azure.com (miễn phí 1000/tháng)
-define('SERPAPI_KEY',        '435b06248db6e3879ae6866728d21ba94f30564376c3737111631db7c74a99b5');  // SerpApi Google Images — serpapi.com (miễn phí 250/tháng)
-define('REMOVEBG_KEY',       'Ud9roGTXJyrzds4paC7K388Z');  // remove.bg — remove.bg/dashboard#api-key (miễn phí 50 lần/tháng)
-define('PIXABAY_KEY',        '55110038-3a27159819805fc1d3758fe86');  // Pixabay
-define('PEXELS_KEY',         '7WhO2yhf9xp7vE4X0m9sNRmJFBke2URHdA1NSMJsxOX6UQk64InX3GDt');  // Pexels — pexels.com/api (miễn phí 20.000/tháng)
-define('GOOGLE_SEARCH_KEY',  'AIzaSyAC30AiAs36tb9HnGDkDZZQlg1jvrgWgO8');  // Google Custom Search — cần bật billing
-define('GOOGLE_SEARCH_CX',   '3411273be375240e9');  // Google Programmable Search Engine ID
+define('AI_MODEL', 'llama-3.2-11b-vision-preview');
+define('BING_SEARCH_KEY',    getenv('BING_SEARCH_KEY')    ?: '');
+define('SERPAPI_KEY',        getenv('SERPAPI_KEY')        ?: '435b06248db6e3879ae6866728d21ba94f30564376c3737111631db7c74a99b5');
+define('REMOVEBG_KEY',       getenv('REMOVEBG_KEY')       ?: 'Ud9roGTXJyrzds4paC7K388Z');
+define('PIXABAY_KEY',        getenv('PIXABAY_KEY')        ?: '55110038-3a27159819805fc1d3758fe86');
+define('PEXELS_KEY',         getenv('PEXELS_KEY')         ?: '7WhO2yhf9xp7vE4X0m9sNRmJFBke2URHdA1NSMJsxOX6UQk64InX3GDt');
+define('GOOGLE_SEARCH_KEY',  getenv('GOOGLE_SEARCH_KEY')  ?: 'AIzaSyAC30AiAs36tb9HnGDkDZZQlg1jvrgWgO8');
+define('GOOGLE_SEARCH_CX',   getenv('GOOGLE_SEARCH_CX')   ?: '3411273be375240e9');
+
+// ── Google OAuth ──────────────────────────────────────────────────────────────
+// Tạo tại: console.cloud.google.com → APIs & Services → Credentials → OAuth 2.0
+// Authorized redirect URI: APP_URL . '/auth/google-callback'
+define('GOOGLE_CLIENT_ID',     getenv('GOOGLE_CLIENT_ID')     ?: '');
+define('GOOGLE_CLIENT_SECRET', getenv('GOOGLE_CLIENT_SECRET') ?: '');
+
+// ── Payment account info ──────────────────────────────────────────────────────
+define('BANK_NAME',    'Techcombank');
+define('BANK_BIN',     'TCB');
+define('BANK_NO',      getenv('BANK_NO')  ?: '2021052004');
+define('BANK_ACCOUNT', 'TUAN HUY COMPUTER');
+define('MOMO_NO',      getenv('MOMO_NO')  ?: '0909999888');
+define('MOMO_ACCOUNT', 'Tuấn Huy Computer');
 
 // ── Zalo OA ───────────────────────────────────────────────────────────────────
 // Hướng dẫn: oa.zalo.me → Cài đặt → Tích hợp API → tạo access token
@@ -33,17 +60,19 @@ define('TELEGRAM_CRON_SECRET',  getenv('TELEGRAM_CRON_SECRET')  ?: 'tuanhuy_cron
 // Dùng Gmail App Password: myaccount.google.com → Security → App passwords
 define('MAIL_HOST',      'smtp.gmail.com');
 define('MAIL_PORT',      587);
-define('MAIL_USER',      'nhthin366@gmail.com');  // ← email Gmail của bạn, vd: shop@gmail.com
-define('MAIL_PASS',      'uflflbwsxwujslhd');  // ← Gmail App Password (16 ký tự, không phải mật khẩu thường)
-define('MAIL_FROM',      'nhthin366@gmail.com');
+define('MAIL_USER',      getenv('MAIL_USER') ?: 'nhthin366@gmail.com');
+define('MAIL_PASS',      getenv('MAIL_PASS') ?: 'uflflbwsxwujslhd');
+define('MAIL_FROM',      getenv('MAIL_FROM') ?: 'nhthin366@gmail.com');
 define('MAIL_FROM_NAME', APP_NAME);
 
 if (session_status() === PHP_SESSION_NONE) {
     session_name('TH_SESS');
     session_start();
 }
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
+$_appIsDev = defined('APP_URL') && strpos(APP_URL, 'localhost') !== false;
+ini_set('display_errors', $_appIsDev ? 1 : 0);
+error_reporting($_appIsDev ? E_ALL : 0);
+unset($_appIsDev);
 
 function formatPrice($price) {
     return number_format((float)$price, 0, ',', '.') . 'đ';
@@ -105,4 +134,52 @@ function calcCartSubtotal($items) {
     $total = 0;
     foreach ($items as $i) $total += (float)$i['unit_price'] * (int)$i['quantity'];
     return $total;
+}
+
+/**
+ * Resize and compress an image using GD.
+ * @param string $srcPath   Source file path
+ * @param string|null $destPath  Destination path (null = overwrite source)
+ * @param int $maxDim       Max width/height in pixels (default 1200)
+ * @param int $quality      JPEG/WebP quality 0-100 (default 85)
+ * @return bool
+ */
+function compressImage($srcPath, $destPath = null, $maxDim = 1200, $quality = 85) {
+    if (!function_exists('imagecreatefromjpeg') || !file_exists($srcPath)) return false;
+    $info = @getimagesize($srcPath);
+    if (!$info) return false;
+    $w = $info[0]; $h = $info[1]; $type = $info[2];
+    $out = $destPath ?: $srcPath;
+    // Skip if already small enough
+    if ($w <= $maxDim && $h <= $maxDim) {
+        if ($out !== $srcPath) copy($srcPath, $out);
+        return true;
+    }
+    switch ($type) {
+        case IMAGETYPE_JPEG: $src = @imagecreatefromjpeg($srcPath); break;
+        case IMAGETYPE_PNG:  $src = @imagecreatefrompng($srcPath);  break;
+        case IMAGETYPE_WEBP: $src = function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($srcPath) : false; break;
+        default: return false;
+    }
+    if (!$src) return false;
+    $ratio = min($maxDim / $w, $maxDim / $h);
+    $nw = (int)round($w * $ratio);
+    $nh = (int)round($h * $ratio);
+    $dst = imagecreatetruecolor($nw, $nh);
+    if ($type === IMAGETYPE_PNG) {
+        imagealphablending($dst, false);
+        imagesavealpha($dst, true);
+        $transparent = imagecolorallocatealpha($dst, 0, 0, 0, 127);
+        imagefilledrectangle($dst, 0, 0, $nw, $nh, $transparent);
+    }
+    imagecopyresampled($dst, $src, 0, 0, 0, 0, $nw, $nh, $w, $h);
+    imagedestroy($src);
+    switch ($type) {
+        case IMAGETYPE_JPEG: $ok = imagejpeg($dst, $out, $quality); break;
+        case IMAGETYPE_PNG:  $ok = imagepng($dst, $out, (int)round((100 - $quality) / 10)); break;
+        case IMAGETYPE_WEBP: $ok = function_exists('imagewebp') ? imagewebp($dst, $out, $quality) : false; break;
+        default: $ok = false;
+    }
+    imagedestroy($dst);
+    return (bool)$ok;
 }

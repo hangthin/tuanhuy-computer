@@ -19,7 +19,14 @@ class CartController {
         $items      = $this->cartModel->getItems();
         $subtotal   = $this->calcSubtotal($items);
         $shipping   = $subtotal >= 500000 ? 0 : 30000;
-        $total      = $subtotal + $shipping;
+        $appliedCoupon  = null;
+        $couponDiscount = 0;
+        $sc = $_SESSION['applied_coupon'] ?? null;
+        if (!empty($sc['code'])) {
+            $appliedCoupon  = $sc;
+            $couponDiscount = (float)($sc['discount'] ?? 0);
+        }
+        $total      = max(0, $subtotal + $shipping - $couponDiscount);
         $categories = (new CategoryModel())->getAll();
         $pageTitle  = 'Giỏ hàng';
         include __DIR__ . '/../Views/cart/index.php';

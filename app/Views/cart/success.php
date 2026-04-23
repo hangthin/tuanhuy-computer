@@ -130,9 +130,9 @@ $addr = implode(', ', $addrParts);
           <?php foreach($order['items'] as $it): ?>
           <div class="sc-item">
             <?php if(!empty($it['image'])): ?>
-            <img class="sc-item-img" src="<?= UPLOAD_URL.htmlspecialchars($it['image']) ?>" alt="" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2246%22 height=%2246%22><rect fill=%22%23f5f5f5%22 width=%2246%22 height=%2246%22/><text x=%2223%22 y=%2229%22 text-anchor=%22middle%22 font-size=%2218%22>📦</text></svg>'">
+            <img class="sc-item-img" src="<?= UPLOAD_URL.htmlspecialchars($it['image']) ?>" alt="" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<div class=\\'sc-item-img\\' style=\\'display:flex;align-items:center;justify-content:center\\'><i class=\\'fa-solid fa-box\\' style=\\'color:#ccc\\'></i></div>')">
             <?php else: ?>
-            <div class="sc-item-img" style="display:flex;align-items:center;justify-content:center;font-size:1.3rem">📦</div>
+            <div class="sc-item-img" style="display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-box" style="color:#ccc"></i></div>
             <?php endif; ?>
             <div class="sc-item-info">
               <div class="name"><?= htmlspecialchars($it['product_name']) ?></div>

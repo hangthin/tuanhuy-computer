@@ -18,17 +18,18 @@ $discPct = $sale ? (int)($p['discount_pct']??0) : 0;
   </div>
   <!-- Image -->
   <a href="<?= APP_URL ?>/products/detail/<?= $p['slug'] ?>" style="display:block">
-    <div style="height:172px;background:linear-gradient(135deg,#f9fafb,#f3f4f6);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden">
+    <div style="height:clamp(130px,18vw,172px);background:#f5f6f8;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden">
       <?php if(!empty($p['image']) && $p['image']!=='default.jpg'): ?>
         <img src="<?= UPLOAD_URL.htmlspecialchars($p['image']) ?>"
              alt="<?= htmlspecialchars($p['name']) ?>"
+             loading="lazy"
              style="width:100%;height:100%;object-fit:contain;padding:8px"
              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-        <div style="display:none;width:100%;height:100%;align-items:center;justify-content:center">
-          <i class="fa-solid <?= $icon ?>" style="font-size:3.5rem;color:#d1d5db"></i>
+        <div style="display:none;width:100%;height:100%;align-items:center;justify-content:center;background:#f5f6f8">
+          <i class="fa-solid <?= $icon ?>" style="font-size:3.5rem;color:#c8cdd5"></i>
         </div>
       <?php else: ?>
-        <i class="fa-solid <?= $icon ?>" style="font-size:3.5rem;color:#d1d5db"></i>
+        <i class="fa-solid <?= $icon ?>" style="font-size:3.5rem;color:#c8cdd5"></i>
       <?php endif; ?>
       <div class="card-actions">
         <button onclick="event.preventDefault();guardedAddToCart(<?= $p['id'] ?>,1,this)" <?= !$ok?'disabled':'' ?>
@@ -50,7 +51,7 @@ $discPct = $sale ? (int)($p['discount_pct']??0) : 0;
     </div>
     <?php endif; ?>
     <a href="<?= APP_URL ?>/products/detail/<?= $p['slug'] ?>" style="text-decoration:none">
-      <h3 style="font-size:.82rem;font-weight:600;color:#111;line-height:1.42;margin-bottom:.3rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.35em">
+      <h3 style="font-size:.82rem;font-weight:600;color:#111;line-height:1.42;margin-bottom:.3rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">
         <?= htmlspecialchars($p['name']) ?>
       </h3>
     </a>

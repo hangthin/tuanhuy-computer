@@ -1,0 +1,42 @@
+{
+    "hero-banner": {
+        "url": "http:\/\/localhost\/tuanhuy_computer\/assets\/images\/hero-banner.png?t=1775616643",
+        "filename": "hero-banner.png",
+        "approved_at": "2026-04-08 02:50:43"
+    },
+    "gaming-pc": {
+        "url": "http:\/\/localhost\/tuanhuy_computer\/assets\/images\/gaming-pc.png?t=1776237691",
+        "filename": "gaming-pc.png",
+        "approved_at": "2026-04-15 07:21:31"
+    },
+    "laptop": {
+        "url": "http:\/\/localhost\/tuanhuy_computer\/assets\/images\/laptop.png?t=1776237758",
+        "filename": "laptop.png",
+        "approved_at": "2026-04-15 07:22:38"
+    },
+    "monitor": {
+        "url": "http:\/\/localhost\/tuanhuy_computer\/assets\/images\/monitor.png",
+        "filename": "monitor.png",
+        "approved_at": "2026-03-25 11:11:08"
+    },
+    "keyboard": {
+        "url": "http:\/\/localhost\/tuanhuy_computer\/assets\/images\/keyboard.png",
+        "filename": "keyboard.png",
+        "approved_at": "2026-03-25 11:15:50"
+    },
+    "mouse": {
+        "url": "http:\/\/localhost\/tuanhuy_computer\/assets\/images\/mouse.png?t=1776240672",
+        "filename": "mouse.png",
+        "approved_at": "2026-04-15 08:11:12"
+    },
+    "headset": {
+        "url": "http:\/\/localhost\/tuanhuy_computer\/assets\/images\/headset.png",
+        "filename": "headset.png",
+        "approved_at": "2026-03-25 11:22:20"
+    },
+    "ram": {
+        "url": "http:\/\/localhost\/tuanhuy_computer\/assets\/images\/ram.png",
+        "filename": "ram.png",
+        "approved_at": "2026-03-26 02:26:29"
+    }
+}

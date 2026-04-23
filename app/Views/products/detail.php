@@ -102,7 +102,8 @@
           <img id="main-img" src="<?= $allImgs[0]['src'] ?>" alt="<?= $allImgs[0]['alt'] ?>"
                style="width:100%;height:100%;object-fit:contain;padding:16px;cursor:zoom-in;transition:opacity .25s;position:absolute;inset:0"
                onclick="openLightbox(this.src)"
-               onerror="this.style.display='none';document.getElementById('main-icon').style.display='flex'">
+               onerror="this.style.display='none';document.getElementById('main-icon').style.display='flex'"
+               loading="eager">
           <div id="main-icon" style="display:none;width:100%;height:100%;align-items:center;justify-content:center">
             <i class="fa-solid <?= $icon ?>"></i>
           </div>
@@ -206,7 +207,7 @@
 
       <!-- Trust -->
       <div class="trust-row">
-        <?php foreach(array('✅ Hàng chính hãng','🔄 Đổi trả 30 ngày','🛡️ BH chính hãng','🚚 Free ship') as $t): ?>
+        <?php foreach(array('Hàng chính hãng','Đổi trả 30 ngày','BH chính hãng','Free ship') as $t): ?>
         <span class="trust-pill"><?= $t ?></span>
         <?php endforeach; ?>
       </div>

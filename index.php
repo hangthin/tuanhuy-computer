@@ -1,4 +1,5 @@
 <?php
+ob_start();
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/config/app.php';
 
@@ -97,9 +98,26 @@ if ($controller === 'admin' && $action === 'logs') {
 // đã đúng mặc định
 
 // /products/laptop -> ProductController->index('laptop')
-if ($controller === 'products' && $action !== 'detail' && $action !== 'index') {
-    $param  = $action;
+if ($controller === 'products' && $action !== 'detail' && $action !== 'index' && $action !== 'pcBuilder') {
+    $param  = $actionRaw;
     $action = 'index';
+}
+
+// /about -> HomeController->about()
+if ($controller === 'about') {
+    $controller = 'home';
+    $action     = 'about';
+}
+
+// /contact -> HomeController->contact()
+if ($controller === 'contact') {
+    $controller = 'home';
+    $action     = 'contact';
+}
+
+// /telegram/webhook -> TelegramBotController->handleWebhook()
+if ($controller === 'telegram' && $action === 'webhook') {
+    $action = 'handleWebhook';
 }
 
 $routes = array(
@@ -112,6 +130,8 @@ $routes = array(
     'admin'    => array('file' => 'app/Controllers/AdminController.php',    'class' => 'AdminController'),
     'api'      => array('file' => 'app/Controllers/ApiController.php',      'class' => 'ApiController'),
     'search'   => array('file' => 'app/Controllers/SearchController.php',   'class' => 'SearchController'),
+    'sse'      => array('file' => 'app/Controllers/SseController.php',      'class' => 'SseController'),
+    'telegram' => array('file' => 'app/Controllers/TelegramBotController.php', 'class' => 'TelegramBotController'),
 );
 
 if (!isset($routes[$controller])) {

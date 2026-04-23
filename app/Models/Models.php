@@ -52,6 +52,46 @@ class UserModel {
     public function updatePassword($id,$hash) {
         $this->db->query("UPDATE users SET password=? WHERE id=?",array($hash,$id));
     }
+    public function findByGoogleId($googleId) {
+        return $this->db->fetch("SELECT * FROM users WHERE google_id=?", array($googleId));
+    }
+    public function linkGoogleId($id, $googleId) {
+        $this->db->query("UPDATE users SET google_id=? WHERE id=?", array($googleId, $id));
+    }
+    public function createViaGoogle($d) {
+        $this->db->query(
+            "INSERT INTO users (fullname, email, avatar, google_id, password, role, is_active) VALUES (?,?,?,?,?,0,1)",
+            array($d['fullname'], $d['email'], $d['avatar'] ?? '', $d['google_id'], '')
+        );
+        return (int)$this->db->lastInsertId();
+    }
+
+    public static function generateOtp($email, $type = 'forgot') {
+        $db = Database::getInstance();
+        $cnt = (int)$db->query(
+            "SELECT COUNT(*) FROM password_otps WHERE email=? AND type=? AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)",
+            array($email, $type)
+        )->fetchColumn();
+        if ($cnt >= 5) return false;
+        $db->query("UPDATE password_otps SET used=1 WHERE email=? AND type=? AND used=0", array($email, $type));
+        $otp = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $db->query(
+            "INSERT INTO password_otps (email, otp, type, expires_at) VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE))",
+            array($email, $otp, $type)
+        );
+        return $otp;
+    }
+
+    public static function verifyOtp($email, $otp, $type = 'forgot') {
+        $db = Database::getInstance();
+        $row = $db->fetch(
+            "SELECT id FROM password_otps WHERE email=? AND otp=? AND type=? AND used=0 AND expires_at > NOW() ORDER BY id DESC LIMIT 1",
+            array($email, $otp, $type)
+        );
+        if (!$row) return false;
+        $db->query("UPDATE password_otps SET used=1 WHERE id=?", array($row['id']));
+        return true;
+    }
 }
 
 class CartModel {
@@ -112,11 +152,11 @@ class OrderModel {
     public function create($d) {
         $code = 'THC'.date('Ymd').rand(100,999);
         $this->db->query(
-            "INSERT INTO orders (order_code,user_id,fullname,email,phone,address,city,district,ward,subtotal,shipping_fee,discount,total,payment_method,notes)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO orders (order_code,user_id,fullname,email,phone,address,city,district,ward,subtotal,shipping_fee,discount,coupon_code,total,payment_method,notes)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             array($code,$d['user_id']??null,$d['fullname'],$d['email']??'',$d['phone'],
                   $d['address'],$d['city']??'',$d['district']??'',$d['ward']??'',
-                  $d['subtotal'],$d['shipping_fee']??0,$d['discount']??0,$d['total'],
+                  $d['subtotal'],$d['shipping_fee']??0,$d['discount']??0,$d['coupon_code']??null,$d['total'],
                   $d['payment_method']??'cod',$d['notes']??''));
         return (int)$this->db->lastInsertId();
     }

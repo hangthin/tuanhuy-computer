@@ -14,6 +14,7 @@ class ProductModel {
         if (!empty($filters['max_price'])) { $where[] = 'COALESCE(p.sale_price,p.price)<=?'; $params[] = $filters['max_price']; }
         if (!empty($filters['is_featured'])) { $where[] = 'p.is_featured=1'; }
         if (!empty($filters['is_new']))      { $where[] = 'p.is_new=1'; }
+        if (!empty($filters['brand']))       { $where[] = 'p.brand_id=?'; $params[] = (int)$filters['brand']; }
         $sort = isset($filters['sort']) ? $filters['sort'] : 'newest';
         switch ($sort) {
             case 'price_asc':  $order = 'COALESCE(p.sale_price,p.price) ASC'; break;
@@ -40,8 +41,24 @@ class ProductModel {
         if (!empty($filters['search']))   { $where[] = '(p.name LIKE ? OR p.short_desc LIKE ?)'; $params[] = '%'.$filters['search'].'%'; $params[] = '%'.$filters['search'].'%'; }
         if (!empty($filters['min_price'])) { $where[] = 'COALESCE(p.sale_price,p.price)>=?'; $params[] = $filters['min_price']; }
         if (!empty($filters['max_price'])) { $where[] = 'COALESCE(p.sale_price,p.price)<=?'; $params[] = $filters['max_price']; }
+        if (!empty($filters['brand']))     { $where[] = 'p.brand_id=?'; $params[] = (int)$filters['brand']; }
         $ws = implode(' AND ',$where);
-        return (int)$this->db->query("SELECT COUNT(*) FROM products p LEFT JOIN categories c ON p.category_id=c.id WHERE {$ws}", $params)->fetchColumn();
+        return (int)$this->db->query("SELECT COUNT(*) FROM products p LEFT JOIN categories c ON p.category_id=c.id LEFT JOIN brands b ON p.brand_id=b.id WHERE {$ws}", $params)->fetchColumn();
+    }
+
+    public function getBrandsForFilter($filters = array()) {
+        $where = array('p.is_active=1', 'p.is_deleted=0', 'p.brand_id IS NOT NULL');
+        $params = array();
+        if (!empty($filters['category'])) { $where[] = 'c.slug=?'; $params[] = $filters['category']; }
+        if (!empty($filters['search']))   { $where[] = '(p.name LIKE ? OR p.short_desc LIKE ?)'; $params[] = '%'.$filters['search'].'%'; $params[] = '%'.$filters['search'].'%'; }
+        $ws = implode(' AND ', $where);
+        return $this->db->fetchAll(
+            "SELECT b.id, b.name, COUNT(p.id) AS cnt
+             FROM products p
+             LEFT JOIN categories c ON p.category_id=c.id
+             LEFT JOIN brands b ON p.brand_id=b.id
+             WHERE {$ws}
+             GROUP BY b.id, b.name HAVING cnt>0 ORDER BY b.name ASC", $params);
     }
 
     public function getBySlug($slug) {
@@ -65,6 +82,13 @@ class ProductModel {
                     COALESCE(p.sale_price,p.price) AS final_price
              FROM products p LEFT JOIN categories c ON p.category_id=c.id LEFT JOIN brands b ON p.brand_id=b.id
              WHERE p.id=?", array($id));   // không filter is_deleted — admin cần xem
+    }
+
+    public function getByCategory($slug, $search='', $sort='newest', $minPrice='', $maxPrice='', $limit=30) {
+        return $this->getAll(array(
+            'category'=>$slug, 'search'=>$search, 'sort'=>$sort,
+            'min_price'=>$minPrice, 'max_price'=>$maxPrice,
+        ), 1, $limit);
     }
 
     public function getFeatured($limit=8)    { return $this->getAll(array('is_featured'=>true),1,$limit); }

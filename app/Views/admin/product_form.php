@@ -274,10 +274,9 @@ if(isset($_SESSION['user_role']) && (int)$_SESSION['user_role'] === 3
           <?php if(!empty($productImages)): foreach($productImages as $pi): ?>
           <div class="xthumb" draggable="true" data-img-id="<?= $pi['id'] ?>" data-img="<?= htmlspecialchars($pi['image']) ?>">
             <img src="<?= UPLOAD_URL.htmlspecialchars($pi['image']) ?>">
-            <a href="<?= APP_URL ?>/admin/products/delete-image?img_id=<?= $pi['id'] ?>&product_id=<?= $product['id']??0 ?>"
-               onclick="return confirm('Xóa ảnh này?')" class="xdel">
+            <span class="xdel" onclick="pfDeleteExtraImg(this,<?= $pi['id'] ?>,<?= $product['id']??0 ?>)">
               <i class="fa-solid fa-xmark"></i>
-            </a>
+            </span>
             <span class="xgrip"><i class="fa-solid fa-grip-dots"></i></span>
             <div class="xt-tools">
               <button type="button" class="xt-tb" onclick="pfProcessThumb(this.closest('.xthumb'),'remove-bg')" title="Tách nền"><i class="fa-solid fa-eraser"></i></button>
@@ -372,6 +371,43 @@ function pfAiApplySpecs(specs){
   setTimeout(function(){box.style.background='';},900);
 }
 
+// ── Spec templates per category ───────────────────────────
+var _specTemplates = {
+  1: ['CPU','RAM','Card đồ họa','Ổ cứng','Mainboard','Nguồn','Case/Vỏ','Hệ điều hành','Cổng kết nối','Kích thước'],
+  2: ['CPU','RAM','Màn hình','Độ phân giải','Card đồ họa','Ổ cứng','Pin','Cổng kết nối','Hệ điều hành','Kích thước','Trọng lượng'],
+  3: ['Kích thước','Độ phân giải','Tần số quét','Thời gian phản hồi','Tấm nền','Độ sáng','Tỷ lệ tương phản','Cổng kết nối','HDR','Điều chỉnh chiều cao','VESA'],
+  4: ['Kết nối','Cảm biến','DPI tối đa','Số nút','Đèn LED','Trọng lượng','Độ dài dây/Pin','Hệ thống hỗ trợ'],
+  5: ['Kết nối','Switch','Layout','Đèn nền','Keycap','Cổng sạc','Polling Rate','Trọng lượng','Hệ thống hỗ trợ'],
+  6: ['Dung lượng','Loại RAM','Tốc độ','Điện áp','Số module','CAS Latency','Hỗ trợ XMP/EXPO','Form Factor'],
+  7: ['Socket','Số nhân / Luồng','Xung cơ bản','Xung tăng tốc','Cache L3','TDP','iGPU','Hỗ trợ RAM','Tiến trình'],
+  8: ['GPU','VRAM','Loại VRAM','Bus bộ nhớ','Xung nhân','Xung bộ nhớ','Cổng xuất hình','TDP','Nguồn yêu cầu','Chiều dài card'],
+  9: ['Dung lượng','Giao tiếp','Chuẩn form','Tốc độ đọc','Tốc độ ghi','Loại NAND','TBW','Kích thước','Mã hóa'],
+  10:['Socket','Chipset','Form Factor','Số khe RAM','RAM tối đa','Khe M.2','Khe PCIe x16','Cổng SATA','Cổng USB sau','Cổng mạng','Audio'],
+  11:['Loại phụ kiện','Kết nối','Tương thích','Màu sắc','Chất liệu']
+};
+
+// Merge template with existing saved values, render all rows
+function specInitWithTemplate(catId, savedSpecs){
+  var box = document.getElementById('specs-rows');
+  box.innerHTML = '';
+  var template = _specTemplates[catId] || [];
+  var rendered = {};
+  // 1. Template fields first (with saved value if any)
+  template.forEach(function(key){
+    var val = (savedSpecs && savedSpecs[key] !== undefined) ? String(savedSpecs[key]) : '';
+    specAddRow(key, val);
+    rendered[key] = true;
+  });
+  // 2. Extra saved fields not in template
+  if(savedSpecs){
+    Object.keys(savedSpecs).forEach(function(key){
+      if(!rendered[key]) specAddRow(key, String(savedSpecs[key]));
+    });
+  }
+  var empty = document.getElementById('specs-empty');
+  if(empty) empty.style.display = box.children.length === 0 ? 'block' : 'none';
+}
+
 // Init specs from existing product data
 (function(){
   <?php
@@ -380,11 +416,28 @@ function pfAiApplySpecs(specs){
     $dec = json_decode($product['specs'], true);
     if (is_array($dec)) $specsArr = $dec;
   }
+  $initCatId = isset($product['category_id']) ? (int)$product['category_id'] : 0;
   ?>
-  var initSpecs=<?= json_encode($specsArr, JSON_UNESCAPED_UNICODE) ?>;
-  var keys=Object.keys(initSpecs);
-  if(keys.length){ keys.forEach(function(k){ specAddRow(k,String(initSpecs[k])); }); }
-  else { document.getElementById('specs-empty').style.display='block'; }
+  var initSpecs = <?= json_encode($specsArr, JSON_UNESCAPED_UNICODE) ?>;
+  var initCat   = <?= $initCatId ?>;
+  specInitWithTemplate(initCat, initSpecs);
+})();
+
+// Re-render spec template when category changes, preserving filled values
+(function(){
+  var catSel = document.querySelector('select[name="category_id"]');
+  if(!catSel) return;
+  catSel.addEventListener('change', function(){
+    var catId = parseInt(this.value) || 0;
+    // Collect current values before clearing
+    var saved = {};
+    document.querySelectorAll('#specs-rows .spec-row').forEach(function(row){
+      var k = row.querySelector('input[name="spec_key[]"]');
+      var v = row.querySelector('input[name="spec_val[]"]');
+      if(k && k.value.trim()) saved[k.value.trim()] = v ? v.value : '';
+    });
+    specInitWithTemplate(catId, saved);
+  });
 })();
 
 // ── Overlay ───────────────────────────────────────────────
@@ -744,14 +797,82 @@ function pfEnsureSaved(cb){
   showToast('Chưa có ảnh để xử lý','err');
 }
 
+// ── Browser-side background removal (no API key needed) ──
+function _pfLoadImgly(cb){
+  if(window._imglyRemoveBg){ cb(); return; }
+  import('https://esm.sh/@imgly/background-removal@1.4.5').then(function(mod){
+    window._imglyRemoveBg = mod.removeBackground || mod.default;
+    cb();
+  }).catch(function(e){ showToast('Không tải được thư viện AI: '+e.message,'err'); });
+}
+function _pfBrowserRemoveBg(imgUrl, onDone, onErr){
+  _pfLoadImgly(function(){
+    fetch(imgUrl).then(function(r){ return r.blob(); }).then(function(blob){
+      var obj = URL.createObjectURL(blob);
+      window._imglyRemoveBg(obj, {output:{format:'image/png'},debug:false})
+        .then(function(resultBlob){
+          URL.revokeObjectURL(obj);
+          // Draw on canvas with explicit transparent background to guarantee alpha channel
+          var blobUrl = URL.createObjectURL(resultBlob);
+          var img2 = new Image();
+          img2.onload = function(){
+            var cv = document.createElement('canvas');
+            cv.width = img2.naturalWidth; cv.height = img2.naturalHeight;
+            var ctx = cv.getContext('2d');
+            ctx.clearRect(0, 0, cv.width, cv.height); // transparent fill
+            ctx.drawImage(img2, 0, 0);
+            URL.revokeObjectURL(blobUrl);
+            cv.toBlob(function(pngBlob){
+              var reader = new FileReader();
+              reader.onload = function(e){ onDone(e.target.result); };
+              reader.readAsDataURL(pngBlob);
+            }, 'image/png');
+          };
+          img2.onerror = function(){ URL.revokeObjectURL(blobUrl); onErr(new Error('Không đọc được ảnh kết quả')); };
+          img2.src = blobUrl;
+        }).catch(function(e){ URL.revokeObjectURL(obj); onErr(e); });
+    }).catch(onErr);
+  });
+}
+
 // ── Tách nền / Gắn logo ───────────────────────────────────
 function pfProcessImage(action){
+  if(action === 'remove-bg'){
+    var btn=document.getElementById('pf-rmbg-btn');
+    var origHtml=btn.innerHTML;
+    btn.disabled=true;
+    btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> AI đang xử lý...';
+    // Get current image URL
+    var imgEl=document.getElementById('main-prev').querySelector('img');
+    var imgUrl = imgEl ? imgEl.src : '';
+    if(!imgUrl){ btn.disabled=false; btn.innerHTML=origHtml; showToast('Chưa có ảnh để tách nền','err'); return; }
+    _pfBrowserRemoveBg(imgUrl, function(b64){
+      fetch(APP_URL+'/api/ai/save-image',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({image_b64:b64, image_mime:'image/png'})
+      }).then(function(r){return r.json();}).then(function(d){
+        btn.disabled=false; btn.innerHTML=origHtml;
+        if(d.success){
+          document.getElementById('main-prev').innerHTML=
+            '<div style="background:repeating-conic-gradient(#2a2a2a 0% 25%,#1a1a1a 0% 50%) 0 0/16px 16px;border-radius:6px;display:inline-block;padding:4px">'
+            +'<img src="'+d.url+'?t='+Date.now()+'" style="max-height:82px;max-width:100%;border-radius:4px;object-fit:contain;display:block"></div>';
+          document.getElementById('pf-presaved').value=d.filename;
+          document.getElementById('pf-b64').value='';
+          document.getElementById('pf-b64-mime').value='';
+          PROD_IMG=d.filename;
+          showToast('Đã tách nền — nền trong suốt (PNG)','ok');
+        } else { showToast('Lỗi lưu ảnh: '+(d.message||''),'err'); }
+      }).catch(function(e){ btn.disabled=false; btn.innerHTML=origHtml; showToast('Lỗi: '+e.message,'err'); });
+    }, function(e){ btn.disabled=false; btn.innerHTML=origHtml; showToast('Tách nền lỗi: '+e.message,'err'); });
+    return;
+  }
+  // Gắn logo — vẫn dùng server
   pfEnsureSaved(function(filename){
-    var btn=document.getElementById(action==='remove-bg'?'pf-rmbg-btn':'pf-wm-btn');
+    var btn=document.getElementById('pf-wm-btn');
     var origHtml=btn.innerHTML;
     btn.disabled=true;
     btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Đang xử lý...';
-    fetch(APP_URL+'/api/ai/'+action,{
+    fetch(APP_URL+'/api/ai/add-watermark',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({filename:filename})
     }).then(function(r){return r.json();}).then(function(d){
@@ -763,10 +884,8 @@ function pfProcessImage(action){
         document.getElementById('pf-b64').value='';
         document.getElementById('pf-b64-mime').value='';
         PROD_IMG=d.filename;
-        showToast(action==='remove-bg'?'Đã tách nền xong!':'Đã gắn logo TH!','ok');
-      } else {
-        showToast((action==='remove-bg'?'Tách nền':'Gắn logo')+' lỗi: '+(d.message||''),'err');
-      }
+        showToast('Đã gắn logo TH!','ok');
+      } else { showToast('Gắn logo lỗi: '+(d.message||''),'err'); }
     }).catch(function(e){ btn.disabled=false; btn.innerHTML=origHtml; showToast('Lỗi: '+e.message,'err'); });
   });
 }
@@ -820,19 +939,15 @@ function pfProcessThumb(thumbEl, action){
   var btns = thumbEl.querySelectorAll('.xt-tb');
   btns.forEach(function(b){ b.classList.add('xt-loading'); });
 
-  fetch(APP_URL+'/api/ai/'+action,{
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({filename:filename})
-  }).then(function(r){return r.json();}).then(function(d){
+  function _applyThumbResult(d, oldFname){
     btns.forEach(function(b){ b.classList.remove('xt-loading'); });
     if(!d.success){ showToast((action==='remove-bg'?'Tách nền':'Gắn logo')+' lỗi: '+(d.message||''),'err'); return; }
-
-    // Cập nhật ảnh preview
     var imgEl = thumbEl.querySelector('img');
-    if(imgEl) imgEl.src = d.url+'?t='+Date.now();
+    if(imgEl){
+      imgEl.src = d.url+'?t='+Date.now();
+      if(action==='remove-bg') thumbEl.style.background='repeating-conic-gradient(#2a2a2a 0% 25%,#1a1a1a 0% 50%) 0 0/10px 10px';
+    }
     thumbEl.dataset.img = d.filename;
-
-    // Nếu là ảnh đã lưu DB → cập nhật DB
     var imgId = thumbEl.dataset.imgId;
     if(imgId){
       fetch(APP_URL+'/api/ai/update-extra-image',{
@@ -840,26 +955,40 @@ function pfProcessThumb(thumbEl, action){
         body:JSON.stringify({img_id:parseInt(imgId), filename:d.filename})
       }).catch(function(e){ console.warn('update-extra-image:',e); });
     }
-
-    // Nếu là search extra → cập nhật hidden input
-    var oldFname = filename;
     var inp = document.querySelector('#search-extra-inputs input[data-fname="'+oldFname+'"]');
     if(inp){ inp.value=d.filename; inp.dataset.fname=d.filename; }
+    showToast(action==='remove-bg'?'Đã tách nền — PNG trong suốt':'Đã gắn logo!','ok');
+  }
 
-    showToast(action==='remove-bg'?'Đã tách nền!':'Đã gắn logo!','ok');
-  }).catch(function(e){
-    btns.forEach(function(b){ b.classList.remove('xt-loading'); });
-    showToast('Lỗi: '+e.message,'err');
-  });
+  if(action === 'remove-bg'){
+    var imgEl2 = thumbEl.querySelector('img');
+    var imgUrl2 = imgEl2 ? imgEl2.src.split('?')[0] : '';
+    if(!imgUrl2){ btns.forEach(function(b){b.classList.remove('xt-loading');}); showToast('Không tìm được URL ảnh','err'); return; }
+    _pfBrowserRemoveBg(imgUrl2, function(b64){
+      fetch(APP_URL+'/api/ai/save-image',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({image_b64:b64, image_mime:'image/png'})
+      }).then(function(r){return r.json();}).then(function(d){ _applyThumbResult(d, filename); })
+        .catch(function(e){ btns.forEach(function(b){b.classList.remove('xt-loading');}); showToast('Lỗi: '+e.message,'err'); });
+    }, function(e){ btns.forEach(function(b){b.classList.remove('xt-loading');}); showToast('Tách nền lỗi: '+e.message,'err'); });
+    return;
+  }
+
+  fetch(APP_URL+'/api/ai/'+action,{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({filename:filename})
+  }).then(function(r){return r.json();}).then(function(d){ _applyThumbResult(d, filename); })
+    .catch(function(e){ btns.forEach(function(b){ b.classList.remove('xt-loading'); }); showToast('Lỗi: '+e.message,'err'); });
 }
 
 // ── Google Image Search: ảnh phụ ─────────────────────────
 function pfExtraImgSearch(){
   var q=document.getElementById('pf-name').value.trim();
   imsOpen(function(url, thumb, title, thumbEl, extra){
+    var payload=extra&&extra.b64 ? {image_b64:extra.b64, image_mime:extra.mime} : {image_url:url};
     fetch(APP_URL+'/api/ai/save-image',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({image_url:url})
+      body:JSON.stringify(payload)
     }).then(function(r){return r.json();}).then(function(d){
       if(thumbEl) thumbEl.classList.remove('ims-loading');
       if(d.success){
@@ -892,6 +1021,20 @@ function pfRemSearchExtra(btn, fname){
   var wrap=btn.closest('.xthumb'); if(wrap) wrap.remove();
   var inp=document.querySelector('#search-extra-inputs input[data-fname="'+fname+'"]');
   if(inp) inp.remove();
+}
+
+// ── Xóa ảnh phụ đã lưu (AJAX, không reload trang) ────────
+function pfDeleteExtraImg(btn, imgId, productId){
+  if(!confirm('Xóa ảnh này?')) return;
+  var thumb = btn.closest('.xthumb');
+  btn.style.pointerEvents='none'; btn.style.opacity='.4';
+  fetch(APP_URL+'/admin/products/delete-image?img_id='+imgId+'&product_id='+productId+'&json=1')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(d.success){ thumb.remove(); }
+      else { btn.style.pointerEvents=''; btn.style.opacity=''; showToast(d.message||'Xóa thất bại','err'); }
+    })
+    .catch(function(){ btn.style.pointerEvents=''; btn.style.opacity=''; showToast('Lỗi kết nối','err'); });
 }
 
 // ── Submit ────────────────────────────────────────────────

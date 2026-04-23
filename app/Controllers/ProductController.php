@@ -19,14 +19,56 @@ class ProductController {
             'max_price'   => isset($_GET['max_price'])?$_GET['max_price']:'',
             'is_featured' => !empty($_GET['is_featured']),
             'is_new'      => !empty($_GET['is_new']),
+            'brand'       => isset($_GET['brand'])?(int)$_GET['brand']:0,
         );
         $limit=ITEMS_PER_PAGE;
+        $brands=$this->model->getBrandsForFilter(array('category'=>$categorySlug,'search'=>$filters['search']));
         $products=$this->model->getAll($filters,$page,$limit);
         $total=$this->model->countAll($filters);
         $totalPages=(int)ceil($total/$limit);
         $categories=$this->catModel->getAll();
         $pageTitle=$category?htmlspecialchars($category['name']):'Tất cả sản phẩm';
         include __DIR__.'/../Views/products/list.php';
+    }
+
+    public function pcBuilder() {
+        // Slot key = DB category slug (1:1 mapping, no translation needed)
+        $slots = array(
+            array('key'=>'man-hinh',   'label'=>'Màn hình',    'icon'=>'fa-desktop'),
+            array('key'=>'vo-case',    'label'=>'Vỏ Case',     'icon'=>'fa-box-open'),
+            array('key'=>'cpu',        'label'=>'CPU',          'icon'=>'fa-microchip'),
+            array('key'=>'mainboard',  'label'=>'Mainboard',   'icon'=>'fa-server'),
+            array('key'=>'ram',        'label'=>'RAM',          'icon'=>'fa-memory'),
+            array('key'=>'card-do-hoa','label'=>'Card đồ họa', 'icon'=>'fa-display'),
+            array('key'=>'ssd-o-cung', 'label'=>'Ổ cứng SSD',  'icon'=>'fa-hard-drive'),
+            array('key'=>'tan-nhiet',  'label'=>'Tản nhiệt',   'icon'=>'fa-fan'),
+            array('key'=>'nguon',      'label'=>'Nguồn (PSU)', 'icon'=>'fa-plug'),
+        );
+        $slotMeta    = array();
+        $slotProducts = array();
+        foreach ($slots as $s) {
+            $slotMeta[$s['key']] = array('has_cat' => true);
+            $raw = $this->model->getByCategory($s['key'], '', 'newest', '', '', 40);
+            $slotProducts[$s['key']] = array();
+            foreach ($raw as $p) {
+                $specs = array();
+                if (!empty($p['specs'])) { $dec = json_decode($p['specs'], true); if (is_array($dec)) $specs = $dec; }
+                $slotProducts[$s['key']][] = array(
+                    'id'        => (int)$p['id'],
+                    'name'      => $p['name'],
+                    'slug'      => $p['slug'],
+                    'image'     => !empty($p['image']) ? UPLOAD_URL.'/'.$p['image'] : '',
+                    'price'     => (float)($p['final_price'] ?? $p['price']),
+                    'short_desc'=> $p['short_desc'] ?? '',
+                    'specs'     => $specs,
+                    'brand'     => $p['brand_name'] ?? '',
+                    'sold'      => (int)($p['sold'] ?? 0),
+                );
+            }
+        }
+        $categories = $this->catModel->getAll();
+        $pageTitle = 'Build PC Gaming';
+        include __DIR__.'/../Views/products/pc_builder.php';
     }
 
     public function detail($slug) {

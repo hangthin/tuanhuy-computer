@@ -126,7 +126,13 @@ function imsRenderGrid(images, provider){
     el.addEventListener('click',function(){
       document.querySelectorAll('.ims-thumb').forEach(function(x){x.classList.remove('ims-selected');});
       el.classList.add('ims-loading','ims-selected');
-      if(_imsCb) _imsCb(img.url, img.thumb, img.title, el, null);
+      // Try fetching image as base64 in browser first (avoids server-side hotlink blocks)
+      imsFetchB64(img.url, function(b64, mime){
+        if(_imsCb) _imsCb(img.url, img.thumb, img.title, el, {b64:b64, mime:mime});
+      }, function(){
+        // Fallback: send URL, let server download
+        if(_imsCb) _imsCb(img.url, img.thumb, img.title, el, null);
+      });
     });
     grid.appendChild(el);
   });

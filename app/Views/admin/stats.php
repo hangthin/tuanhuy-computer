@@ -46,8 +46,8 @@ foreach ($topCats as $tc) { $catNames[] = $tc['name']; $catVals[] = (int)$tc['to
 $totalCatSold = array_sum($catVals) ?: 1;
 ?>
 
-<!-- KPI Cards -->
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin-bottom:1rem">
+<!-- KPI Row 1: Revenue -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin-bottom:.75rem">
   <div class="st-kpi">
     <div class="st-kpi-lbl">Hôm nay</div>
     <div class="st-kpi-val" style="color:var(--red)"><?= formatPrice($today_rev) ?></div>
@@ -56,7 +56,15 @@ $totalCatSold = array_sum($catVals) ?: 1;
   <div class="st-kpi">
     <div class="st-kpi-lbl">Tháng <?= date('n/Y') ?></div>
     <div class="st-kpi-val" style="color:#60a5fa"><?= formatPrice($month_rev) ?></div>
-    <div class="st-kpi-sub"><?= $month_cnt ?> đơn hàng</div>
+    <div class="st-kpi-sub" style="display:flex;align-items:center;gap:.35rem">
+      <span><?= $month_cnt ?> đơn</span>
+      <?php
+        $pctColor = $monthRevPct >= 0 ? '#4ade80' : '#f87171';
+        $pctIcon  = $monthRevPct >= 0 ? '▲' : '▼';
+      ?>
+      <span style="color:<?= $pctColor ?>;font-weight:700"><?= $pctIcon ?> <?= abs($monthRevPct) ?>%</span>
+      <span style="color:#333">vs T<?= (int)date('n') > 1 ? (int)date('n')-1 : 12 ?></span>
+    </div>
   </div>
   <div class="st-kpi">
     <div class="st-kpi-lbl">Năm <?= date('Y') ?></div>
@@ -70,14 +78,38 @@ $totalCatSold = array_sum($catVals) ?: 1;
   </div>
 </div>
 
-<!-- Charts Row -->
+<!-- KPI Row 2: Operational metrics -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin-bottom:.75rem">
+  <div class="st-kpi">
+    <div class="st-kpi-lbl">Tỷ lệ chuyển đổi</div>
+    <div class="st-kpi-val" style="color:#a78bfa"><?= $convRate ?>%</div>
+    <div class="st-kpi-sub">Đơn thành công / tổng đơn tháng này</div>
+  </div>
+  <div class="st-kpi">
+    <div class="st-kpi-lbl">AOV tháng này</div>
+    <div class="st-kpi-val" style="color:#f97316"><?= formatPrice($monthAOV) ?></div>
+    <div class="st-kpi-sub">Giá trị trung bình / đơn</div>
+  </div>
+  <div class="st-kpi">
+    <div class="st-kpi-lbl">Khách mới tháng này</div>
+    <div class="st-kpi-val" style="color:#34d399"><?= number_format($newCustomers) ?></div>
+    <div class="st-kpi-sub">Tài khoản đăng ký mới</div>
+  </div>
+  <div class="st-kpi" style="<?= $lowStockCount > 0 ? 'border-color:rgba(251,191,36,.25)' : '' ?>">
+    <div class="st-kpi-lbl">Sắp hết hàng</div>
+    <div class="st-kpi-val" style="color:<?= $lowStockCount > 0 ? '#fbbf24' : '#555' ?>"><?= $lowStockCount ?></div>
+    <div class="st-kpi-sub"><?= $lowStockCount > 0 ? 'Sản phẩm cần nhập thêm' : 'Kho ổn định' ?></div>
+  </div>
+</div>
+
+<!-- Charts Row 1: 7-day line + category doughnut -->
 <div style="display:grid;grid-template-columns:1fr 300px;gap:.75rem;margin-bottom:.75rem">
 
-  <!-- Line chart -->
+  <!-- 7-day line chart -->
   <div class="st-section">
-    <div class="st-sec-title"><i class="fa-solid fa-chart-line"></i> Doanh thu &amp; đơn hàng theo tháng — <?= date('Y') ?></div>
-    <div style="position:relative;height:220px">
-      <canvas id="lineChart"></canvas>
+    <div class="st-sec-title"><i class="fa-solid fa-chart-line"></i> Doanh thu 7 ngày gần nhất</div>
+    <div style="position:relative;height:200px">
+      <canvas id="week7Chart"></canvas>
     </div>
   </div>
 
@@ -104,9 +136,42 @@ $totalCatSold = array_sum($catVals) ?: 1;
   </div>
 </div>
 
+<!-- Charts Row 2: 12-month line + top 5 products bar -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem">
+
+  <!-- 12-month line chart -->
+  <div class="st-section">
+    <div class="st-sec-title"><i class="fa-solid fa-chart-line"></i> Doanh thu &amp; đơn hàng theo tháng — <?= date('Y') ?></div>
+    <div style="position:relative;height:200px">
+      <canvas id="lineChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Top 5 products bar chart -->
+  <div class="st-section">
+    <div class="st-sec-title"><i class="fa-solid fa-chart-bar"></i> Top 5 sản phẩm theo doanh thu</div>
+    <div style="position:relative;height:200px">
+      <canvas id="topProdChart"></canvas>
+    </div>
+  </div>
+</div>
+
 <!-- Monthly Table -->
 <div class="st-section">
-  <div class="st-sec-title"><i class="fa-solid fa-table-list"></i> Chi tiết theo tháng — <?= date('Y') ?></div>
+  <div class="st-sec-title" style="justify-content:space-between">
+    <span><i class="fa-solid fa-table-list"></i> Chi tiết theo tháng — <?= date('Y') ?></span>
+    <div class="btn-export-group" style="display:flex;gap:.3rem">
+      <a href="?export=csv" class="btn-g" style="font-size:.75rem;display:inline-flex;align-items:center;gap:.3rem;padding:.3rem .6rem;text-decoration:none">
+        <i class="fa-solid fa-file-csv" style="color:#22c55e;font-size:.7rem"></i> CSV
+      </a>
+      <button onclick="window.print()" class="btn-g" style="font-size:.75rem;display:inline-flex;align-items:center;gap:.3rem;padding:.3rem .6rem">
+        <i class="fa-solid fa-print"></i> In
+      </button>
+      <a href="<?= APP_URL ?>/admin/export-pdf?type=stats" target="_blank" class="btn-g" style="font-size:.75rem;display:inline-flex;align-items:center;gap:.3rem;padding:.3rem .6rem;text-decoration:none">
+        <i class="fa-solid fa-file-pdf" style="color:#ef4444"></i> PDF
+      </a>
+    </div>
+  </div>
   <!-- Header -->
   <div class="st-mrow st-mrow-head" style="display:grid">
     <span>Tháng</span><span>Biểu đồ</span><span style="text-align:right">Đơn hàng</span><span style="text-align:right">TB/đơn</span><span style="text-align:right">Doanh thu</span>
@@ -147,70 +212,139 @@ $totalCatSold = array_sum($catVals) ?: 1;
 
 <script>
 <?php
-$revMil  = array_map(function($v){ return round($v/1000000, 2); }, $revArr);
-$revFull = $revArr; // raw for tooltip
+$revMil   = array_map(function($v){ return round($v/1000000, 2); }, $revArr);
+$w7RevMil = array_map(function($v){ return round($v/1000000, 2); }, $last7Rev);
+$topProdNames = array(); $topProdRevMil = array();
+foreach ($topProducts as $tp) {
+    $shortName = mb_strlen($tp['name']) > 28 ? mb_substr($tp['name'], 0, 26).'…' : $tp['name'];
+    $topProdNames[]  = $shortName;
+    $topProdRevMil[] = round($tp['rev'] / 1000000, 2);
+}
 ?>
-// Line chart
+var _chartDefaults = {
+  tooltip: { backgroundColor:'#1a1a1a', borderColor:'#2a2a2a', borderWidth:1, titleColor:'#888', bodyColor:'#ddd', padding:10 },
+  legend:  { labels: { color:'#555', font:{ size:10 }, boxWidth:10, padding:10 } }
+};
+
+// 7-day line chart
 (function(){
-  var labels = <?= json_encode($months12) ?>;
-  var revMil = <?= json_encode($revMil) ?>;
-  var cntArr = <?= json_encode($cntArr) ?>;
+  var ctx = document.getElementById('week7Chart');
+  if(!ctx) return;
+  new Chart(ctx.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: <?= json_encode($last7Labels) ?>,
+      datasets: [
+        {
+          label: 'Doanh thu (triệu đ)',
+          data: <?= json_encode($w7RevMil) ?>,
+          borderColor: '#E30000',
+          backgroundColor: 'rgba(227,0,0,.08)',
+          fill: true, tension: .35,
+          pointBackgroundColor: '#E30000',
+          pointRadius: 4, pointHoverRadius: 6,
+          borderWidth: 2, yAxisID: 'y'
+        },
+        {
+          label: 'Số đơn',
+          data: <?= json_encode($last7Cnt) ?>,
+          borderColor: 'rgba(167,139,250,.8)',
+          backgroundColor: 'transparent',
+          fill: false, tension: .35,
+          pointBackgroundColor: '#a78bfa',
+          pointRadius: 3, pointHoverRadius: 5,
+          borderWidth: 1.5, borderDash: [4,3], yAxisID: 'y1'
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 500 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: _chartDefaults.legend, tooltip: _chartDefaults.tooltip },
+      scales: {
+        y:  { grid: { color:'rgba(255,255,255,.03)' }, ticks: { color:'#444', font:{ size:10 } }, border:{ dash:[4,4] } },
+        y1: { position:'right', grid:{ display:false }, ticks:{ color:'#444', font:{ size:10 } } },
+        x:  { grid:{ display:false }, ticks:{ color:'#444', font:{ size:10 } } }
+      }
+    }
+  });
+})();
+
+// 12-month line chart
+(function(){
   var ctx = document.getElementById('lineChart');
   if(!ctx) return;
   new Chart(ctx.getContext('2d'), {
     type: 'line',
     data: {
-      labels: labels,
+      labels: <?= json_encode($months12) ?>,
       datasets: [
         {
           label: 'Doanh thu (triệu đ)',
-          data: revMil,
+          data: <?= json_encode($revMil) ?>,
           borderColor: '#E30000',
           backgroundColor: 'rgba(227,0,0,.07)',
-          fill: true,
-          tension: .4,
+          fill: true, tension: .4,
           pointBackgroundColor: '#E30000',
-          pointRadius: 4,
-          pointHoverRadius: 6,
-          borderWidth: 2,
-          yAxisID: 'y'
+          pointRadius: 4, pointHoverRadius: 6,
+          borderWidth: 2, yAxisID: 'y'
         },
         {
           label: 'Số đơn',
-          data: cntArr,
+          data: <?= json_encode($cntArr) ?>,
           borderColor: 'rgba(96,165,250,.8)',
           backgroundColor: 'transparent',
-          fill: false,
-          tension: .4,
+          fill: false, tension: .4,
           pointBackgroundColor: '#60a5fa',
-          pointRadius: 3,
-          pointHoverRadius: 5,
-          borderWidth: 1.5,
-          borderDash: [4,3],
-          yAxisID: 'y1'
+          pointRadius: 3, pointHoverRadius: 5,
+          borderWidth: 1.5, borderDash: [4,3], yAxisID: 'y1'
         }
       ]
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
+      responsive: true, maintainAspectRatio: false,
       animation: { duration: 600 },
       interaction: { mode: 'index', intersect: false },
+      plugins: { legend: _chartDefaults.legend, tooltip: _chartDefaults.tooltip },
+      scales: {
+        y:  { grid:{ color:'rgba(255,255,255,.03)' }, ticks:{ color:'#444', font:{ size:10 } }, border:{ dash:[4,4] } },
+        y1: { position:'right', grid:{ display:false }, ticks:{ color:'#444', font:{ size:10 } } },
+        x:  { grid:{ display:false }, ticks:{ color:'#444', font:{ size:10 } } }
+      }
+    }
+  });
+})();
+
+// Top 5 products bar chart
+(function(){
+  var ctx = document.getElementById('topProdChart');
+  if(!ctx) return;
+  new Chart(ctx.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: <?= json_encode($topProdNames) ?>,
+      datasets: [{
+        label: 'Doanh thu (triệu đ)',
+        data: <?= json_encode($topProdRevMil) ?>,
+        backgroundColor: ['rgba(227,0,0,.7)','rgba(249,115,22,.7)','rgba(251,191,36,.7)','rgba(74,222,128,.7)','rgba(96,165,250,.7)'],
+        borderColor:     ['#E30000','#f97316','#fbbf24','#4ade80','#60a5fa'],
+        borderWidth: 1,
+        borderRadius: 5,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 500 },
       plugins: {
-        legend: { labels: { color: '#555', font: { size: 10 }, boxWidth: 10, padding: 10 } },
-        tooltip: {
-          backgroundColor: '#1a1a1a',
-          borderColor: '#2a2a2a',
-          borderWidth: 1,
-          titleColor: '#888',
-          bodyColor: '#ddd',
-          padding: 10
-        }
+        legend: { display: false },
+        tooltip: _chartDefaults.tooltip
       },
       scales: {
-        y:  { grid: { color: 'rgba(255,255,255,.03)' }, ticks: { color: '#444', font: { size: 10 } }, border: { dash: [4,4] } },
-        y1: { position: 'right', grid: { display: false }, ticks: { color: '#444', font: { size: 10 } } },
-        x:  { grid: { display: false }, ticks: { color: '#444', font: { size: 10 } } }
+        x: { grid:{ color:'rgba(255,255,255,.03)' }, ticks:{ color:'#444', font:{ size:10 } }, border:{ dash:[4,4] } },
+        y: { grid:{ display:false }, ticks:{ color:'#888', font:{ size:10 } } }
       }
     }
   });
@@ -227,25 +361,14 @@ $revFull = $revArr; // raw for tooltip
       datasets: [{
         data: <?= json_encode($catVals) ?>,
         backgroundColor: ['#E30000','#f97316','#fbbf24','#4ade80','#60a5fa','#a78bfa'],
-        borderWidth: 0,
-        hoverOffset: 4
+        borderWidth: 0, hoverOffset: 4
       }]
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
+      responsive: true, maintainAspectRatio: false,
       cutout: '65%',
       animation: { duration: 500 },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: '#1a1a1a',
-          borderColor: '#2a2a2a',
-          borderWidth: 1,
-          titleColor: '#888',
-          bodyColor: '#ddd'
-        }
-      }
+      plugins: { legend:{ display:false }, tooltip: _chartDefaults.tooltip }
     }
   });
 })();

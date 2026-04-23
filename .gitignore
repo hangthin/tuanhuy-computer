@@ -1,6 +1,9 @@
 # Config local - dùng getenv() cho production
-# config/app.php
-# config/database.php
+config/app.php
+config/database.php
+.env
+.env.*
+.env.local
 
 # Storage
 storage/

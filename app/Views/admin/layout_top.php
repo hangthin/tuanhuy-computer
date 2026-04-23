@@ -45,6 +45,38 @@ body{font-family:'Be Vietnam Pro',sans-serif;background:#0f0f0f;color:#ddd}
 .toast{background:#1e1e1e;color:#fff;padding:.65rem 1.1rem;border-radius:8px;border-left:4px solid var(--red);min-width:220px;font-size:.82rem;animation:fadeIn .3s}
 .toast.ok{border-color:#22c55e}.toast.err{border-color:#ef4444}
 ::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:#111}::-webkit-scrollbar-thumb{background:#333;border-radius:2px}
+/* ── Notification bell ── */
+#notif-wrap{position:relative}
+#notif-btn{background:none;border:1px solid #252525;border-radius:8px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#666;transition:.15s;position:relative}
+#notif-btn:hover{border-color:#444;color:#ccc;background:#1a1a1a}
+#notif-btn.has-new{border-color:#ef444466;color:#ef4444;animation:bellRing .5s ease}
+@keyframes bellRing{0%,100%{transform:rotate(0)}20%{transform:rotate(-15deg)}40%{transform:rotate(15deg)}60%{transform:rotate(-10deg)}80%{transform:rotate(10deg)}}
+#notif-badge{position:absolute;top:-5px;right:-5px;background:#ef4444;color:#fff;font-size:.55rem;font-weight:800;min-width:16px;height:16px;border-radius:99px;display:none;align-items:center;justify-content:center;border:1.5px solid #0f0f0f;padding:0 3px;line-height:1}
+#notif-drop{position:absolute;top:calc(100% + 8px);right:0;width:320px;background:#141414;border:1px solid #252525;border-radius:12px;box-shadow:0 16px 48px rgba(0,0,0,.7);z-index:9990;overflow:hidden;animation:fadeIn .18s ease}
+#notif-drop-hd{padding:.6rem .85rem;border-bottom:1px solid #1e1e1e;display:flex;align-items:center;justify-content:space-between}
+#notif-list a:last-child{border-bottom:none!important}
+#notif-footer{padding:.45rem .85rem;border-top:1px solid #1e1e1e;text-align:center}
+@keyframes spin{to{transform:rotate(360deg)}}
+.notif-item{display:block;padding:.62rem .85rem;text-decoration:none;border-bottom:1px solid #1e1e1e;transition:background .15s;animation:fadeIn .28s ease}
+.notif-item:hover{background:#1a1a1a}
+.notif-item.is-new{animation:fadeIn .4s ease;background:rgba(239,68,68,.06);border-left:2px solid #ef444466}
+</style>
+<style media="print">
+  .sidebar,.top-nav,#pg-loader,#toast-c,.btn-r,.btn-g,.btn-export-group,
+  .ord-tabs,.ord-filter,.ord-stats,.prd-toolbar,.prd-vtabs,.prd-cats,
+  .prd-pages,.pagination,.filter-bar,.notif-wrap,#notif-wrap,
+  [onclick],[href*="create"],[href*="edit"],[href*="delete"]{display:none!important}
+  .main-wrap{margin-left:0!important;padding:.5rem!important}
+  body{background:#fff!important;color:#111!important}
+  .card,.stat-card,.prd-wrap{background:#fff!important;border:1px solid #ccc!important;box-shadow:none!important}
+  .adm-table th{background:#111!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .adm-table td{color:#111!important;border-bottom:1px solid #ddd!important}
+  .adm-table tr:nth-child(even) td{background:#f9f9f9!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  table{page-break-inside:auto}
+  tr{page-break-inside:avoid;page-break-after:auto}
+  thead{display:table-header-group}
+  @page{size:A4 landscape;margin:1.2cm}
+  h1,h2,h3{color:#111!important}
 </style>
 </head>
 <body>
@@ -74,10 +106,10 @@ body{font-family:'Be Vietnam Pro',sans-serif;background:#0f0f0f;color:#ddd}
     $navs = array(
       array('/admin','fas fa-tachometer-alt','Dashboard'),
       array('/admin/stats','fas fa-chart-line','Thống kê'),
-      array('/admin/ai/generator','fa-solid fa-wand-magic-sparkles','AI Generator ✨'),
+      array('/admin/ai/generator','fa-solid fa-wand-magic-sparkles','AI Generator'),
     );
-    // Thêm AI Report + Telegram Bot (Admin only)
-    if(isAdmin()) $navs[] = array('/admin/ai-report','fa-solid fa-brain','AI Report 🧠');
+    // Thêm AI Assistant + Telegram Bot (Admin only) — AI Report chạy ngầm qua cron/Telegram
+    if(isAdmin()) $navs[] = array('/admin/ai-assistant','fa-solid fa-robot','AI Assistant');
     if(isAdmin()) $navs[] = array('/admin/telegram-bot','fa-brands fa-telegram','Telegram Bot');
     foreach($navs as $n): $np=$n[0];$ni=$n[1];$nl=$n[2];
       $active = (rtrim(str_replace(APP_URL,'',$curUri),'/')===$np)?'active':'';
@@ -104,6 +136,7 @@ body{font-family:'Be Vietnam Pro',sans-serif;background:#0f0f0f;color:#ddd}
     <div style="padding:.5rem .9rem .15rem;font-size:.62rem;color:#444;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-top:.4rem">Hệ thống</div>
     <?php if(isAdmin()): ?>
     <a href="<?= APP_URL ?>/admin/logs" class="nav-item <?= strpos($curUri,'/admin/logs')!==false?'active':'' ?>"><i class="fa-solid fa-clock-rotate-left" style="width:15px;text-align:center"></i>Nhật ký</a>
+    <a href="<?= APP_URL ?>/admin/assets" class="nav-item <?= strpos($curUri,'/admin/assets')!==false?'active':'' ?>"><i class="fa-solid fa-photo-film" style="width:15px;text-align:center"></i>Asset Manager</a>
     <?php endif; ?>
     <a href="<?= APP_URL ?>/" target="_blank" class="nav-item"><i class="fas fa-external-link-alt" style="width:15px;text-align:center"></i>Xem website</a>
     <a href="<?= APP_URL ?>/auth/logout" class="nav-item" style="color:#ef4444" onclick="return confirm('Đăng xuất?')"><i class="fas fa-sign-out-alt" style="width:15px;text-align:center"></i>Đăng xuất</a>
@@ -116,5 +149,144 @@ body{font-family:'Be Vietnam Pro',sans-serif;background:#0f0f0f;color:#ddd}
       <h1 style="font-size:1.15rem;font-weight:800;color:#fff"><?= isset($pageTitle)?$pageTitle:'Admin' ?></h1>
       <p style="color:#444;font-size:.75rem;margin-top:.1rem"><?= date('l, d/m/Y H:i') ?></p>
     </div>
-    <a href="<?= APP_URL ?>/admin/products/create" class="btn-r" style="text-decoration:none;font-size:.78rem;padding:.4rem .8rem"><i class="fas fa-plus mr-1"></i>Thêm SP</a>
+    <div style="display:flex;align-items:center;gap:.55rem">
+      <!-- Notification bell -->
+      <div id="notif-wrap">
+        <button id="notif-btn" title="Đơn hàng mới">
+          <i class="fas fa-bell" style="font-size:.82rem"></i>
+          <span id="notif-badge"></span>
+        </button>
+        <div id="notif-drop" style="display:none">
+          <div id="notif-drop-hd">
+            <span style="font-size:.78rem;font-weight:700;color:#ddd"><i class="fas fa-bell" style="color:var(--red);margin-right:.35rem"></i>Đơn hàng mới</span>
+            <a href="<?= APP_URL ?>/admin/orders" style="font-size:.68rem;color:var(--red);text-decoration:none">Xem tất cả</a>
+          </div>
+          <div id="notif-list"></div>
+          <div id="notif-footer">
+            <button id="notif-clear" style="background:none;border:none;color:#444;font-size:.68rem;cursor:pointer;font-family:inherit">Đánh dấu đã đọc</button>
+          </div>
+        </div>
+      </div>
+      <a href="<?= APP_URL ?>/admin/products/create" class="btn-r" style="text-decoration:none;font-size:.78rem;padding:.4rem .8rem"><i class="fas fa-plus mr-1"></i>Thêm SP</a>
+    </div>
   </div>
+
+<script>
+(function(){
+  var APP_URL   = '<?= APP_URL ?>';
+  var UPLOAD_URL = '<?= UPLOAD_URL ?>';
+  var LS_KEY    = 'th_notif_since';
+  var INTERVAL  = 30000;
+  var btn       = document.getElementById('notif-btn');
+  var badge     = document.getElementById('notif-badge');
+  var drop      = document.getElementById('notif-drop');
+  var list      = document.getElementById('notif-list');
+  var clearBtn  = document.getElementById('notif-clear');
+  var prevIds    = [];
+  var firstPoll  = true;
+
+  function getSince(){ var v=localStorage.getItem(LS_KEY); return v ? parseInt(v) : Math.floor(Date.now()/1000)-3600; }
+  function setSince(ts){ localStorage.setItem(LS_KEY, ts); }
+  function esc(s){ var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+  function fmtVND(n){ return parseInt(n).toLocaleString('vi-VN')+'đ'; }
+  function timeAgo(dt){
+    var d=Math.floor((Date.now()-new Date(dt).getTime())/1000);
+    if(d<60) return d+' giây trước';
+    if(d<3600) return Math.floor(d/60)+' phút trước';
+    return Math.floor(d/3600)+' giờ trước';
+  }
+
+  function renderList(orders,newIds){
+    list.innerHTML='';
+    if(!orders||!orders.length){
+      list.innerHTML='<div style="padding:.85rem 1rem;color:#444;font-size:.75rem;text-align:center">Không có đơn hàng mới</div>';
+      return;
+    }
+    orders.forEach(function(o){
+      var a=document.createElement('a');
+      a.href=APP_URL+'/admin/orders/detail?id='+o.id;
+      a.className='notif-item'+(newIds&&newIds.indexOf(o.id)!==-1?' is-new':'');
+      var img=o.product_image&&o.product_image!=='default.jpg'
+        ? '<img src="'+UPLOAD_URL+esc(o.product_image)+'" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid #222;flex-shrink:0" onerror="this.style.display=\'none\'">'
+        : '<div style="width:40px;height:40px;background:#1a1a1a;border-radius:6px;border:1px solid #222;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-microchip" style="color:#333;font-size:.75rem"></i></div>';
+      a.innerHTML=
+        '<div style="display:flex;gap:.6rem;align-items:center">'+img+
+        '<div style="flex:1;min-width:0">'+
+        '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:.2rem">'+
+        '<span style="color:#ddd;font-weight:600;font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:138px">'+esc(o.product_name||'—')+'</span>'+
+        '<span style="color:#444;font-size:.62rem;flex-shrink:0">'+timeAgo(o.created_at)+'</span></div>'+
+        '<div style="color:#777;font-size:.71rem;margin-top:.1rem">'+esc(o.fullname)+'</div>'+
+        '<div style="display:flex;justify-content:space-between;margin-top:.15rem">'+
+        '<span style="color:#555;font-size:.68rem">x'+(o.quantity||1)+' · '+fmtVND(o.price||0)+'</span>'+
+        '<span style="color:#4ade80;font-size:.72rem;font-weight:700">'+fmtVND(o.total)+'</span>'+
+        '</div></div></div>';
+      list.appendChild(a);
+    });
+  }
+
+  function showBadge(n){
+    badge.textContent=n>9?'9+':n;
+    badge.style.display='flex';
+    btn.classList.add('has-new');
+  }
+  function hideBadge(){
+    badge.style.display='none';
+    btn.classList.remove('has-new');
+  }
+
+  function browserNotify(o){
+    if(!('Notification' in window)) return;
+    if(Notification.permission==='granted'){
+      new Notification('🛍️ Đơn hàng mới',{
+        body: (o.product_name||o.order_code||'')+'  —  '+o.fullname+' ('+fmtVND(o.total)+')',
+        icon: APP_URL+'/assets/images/hero-banner.jpg'
+      });
+    }
+  }
+
+  function poll(){
+    var since=getSince();
+    fetch(APP_URL+'/admin/api/new-orders-count?since='+since)
+      .then(function(r){return r.json();})
+      .then(function(d){
+        if(!d.success) return;
+        var orders=d.orders||[];
+        var ids=orders.map(function(o){return o.id;});
+        var newIds=firstPoll?[]:ids.filter(function(id){return prevIds.indexOf(id)===-1;});
+        firstPoll=false;
+        if(d.count>0) showBadge(d.count); else hideBadge();
+        renderList(orders,newIds);
+        if(newIds.length>0){
+          var notifOrder=orders.filter(function(o){return o.id===newIds[0];})[0]||orders[0];
+          if(notifOrder) browserNotify(notifOrder);
+        }
+        prevIds=ids;
+      })
+      .catch(function(e){ console.error('[notif poll]',e); });
+  }
+
+  btn.addEventListener('click',function(e){
+    e.stopPropagation();
+    var open=drop.style.display!=='none';
+    drop.style.display=open?'none':'block';
+  });
+  document.addEventListener('click',function(){ drop.style.display='none'; });
+  drop.addEventListener('click',function(e){ e.stopPropagation(); });
+
+  clearBtn.addEventListener('click',function(){
+    setSince(Math.floor(Date.now()/1000));
+    prevIds=[];
+    hideBadge();
+    renderList([]);
+    drop.style.display='none';
+  });
+
+  if('Notification' in window && Notification.permission==='default'){
+    Notification.requestPermission();
+  }
+
+  renderList([]);
+  poll();
+  setInterval(poll,INTERVAL);
+})();
+</script>

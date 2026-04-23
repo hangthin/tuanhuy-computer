@@ -20,21 +20,11 @@
 .ord-card{background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:box-shadow .2s,border-color .2s;margin-bottom:.75rem;cursor:pointer}
 .ord-card:hover{box-shadow:0 6px 24px rgba(0,0,0,.09);border-color:#d1d5db}
 .ord-card.expanded{border-color:var(--red);box-shadow:0 4px 20px rgba(227,0,0,.08)}
-.ord-head{padding:.9rem 1.1rem;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
-.ord-code{font-weight:800;color:var(--red);font-size:.9rem;letter-spacing:.3px;flex-shrink:0}
-.ord-meta{color:#888;font-size:.76rem;display:flex;align-items:center;gap:.4rem}
+.ord-head{padding:.75rem 1.1rem;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+.ord-meta{color:#888;font-size:.76rem;display:flex;align-items:center;gap:.4rem;flex:1}
 .ord-meta i{opacity:.6;font-size:.7rem}
-.ord-total{font-weight:800;color:var(--text);font-size:.92rem;margin-left:auto}
-.ord-body{border-top:1px solid #f5f5f5;padding:.85rem 1.1rem;display:none;animation:fadeIn .2s ease}
+.ord-total{font-weight:800;color:var(--text);font-size:.92rem;flex-shrink:0}
 @keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
-.ord-card.expanded .ord-body{display:block}
-.ord-item{display:flex;align-items:center;gap:.75rem;padding:.45rem 0;border-bottom:1px solid #fafafa}
-.ord-item:last-child{border-bottom:none}
-.ord-item-img{width:48px;height:48px;border-radius:7px;object-fit:cover;border:1px solid #eee;flex-shrink:0;background:#f5f5f5}
-.ord-item-name{flex:1;font-size:.82rem;font-weight:500;color:var(--text);line-height:1.4}
-.ord-item-name span{display:block;color:#999;font-size:.73rem;font-weight:400}
-.ord-item-price{font-weight:700;color:var(--red);font-size:.82rem;text-align:right;flex-shrink:0}
-.ord-summary{display:grid;grid-template-columns:1fr 1fr;gap:.5rem 1.5rem;padding:.75rem 0 .3rem;border-top:1px solid #f5f5f5;margin-top:.5rem}
 .ord-sum-row{display:flex;justify-content:space-between;font-size:.79rem}
 .ord-sum-row.total{font-weight:800;font-size:.88rem;color:var(--red)}
 .ord-sum-row .lbl{color:#888}
@@ -45,12 +35,32 @@
 
 /* Status */
 .sbadge{display:inline-flex;align-items:center;gap:.3rem;padding:3px 10px;border-radius:99px;font-size:.7rem;font-weight:600;flex-shrink:0}
-.sbadge.pending   {background:#fef9c3;color:#854d0e}
-.sbadge.confirmed {background:#dbeafe;color:#1e40af}
-.sbadge.processing{background:#fde8d8;color:#9a3412}
-.sbadge.shipping  {background:#e0f2fe;color:#075985}
-.sbadge.delivered {background:#dcfce7;color:#166534}
-.sbadge.cancelled {background:#fee2e2;color:#991b1b}
+.sbadge.pending          {background:#fef9c3;color:#854d0e}
+.sbadge.pending_payment  {background:#fef3c7;color:#92400e}
+.sbadge.confirmed        {background:#dbeafe;color:#1e40af}
+.sbadge.processing       {background:#fde8d8;color:#9a3412}
+.sbadge.shipping         {background:#e0f2fe;color:#075985}
+.sbadge.delivered        {background:#dcfce7;color:#166534}
+.sbadge.cancelled        {background:#fee2e2;color:#991b1b}
+
+/* Product rows (always visible) */
+.ord-products{padding:.1rem 1.1rem .2rem;border-top:1px solid #f5f5f5}
+.ord-prow{display:flex;align-items:center;gap:.75rem;padding:.55rem 0;border-bottom:1px solid #fafafa}
+.ord-prow:last-child{border-bottom:none}
+.ord-pimg{width:52px;height:52px;border-radius:8px;object-fit:cover;border:1px solid #eee;flex-shrink:0;background:#f5f5f5;display:flex;align-items:center;justify-content:center}
+.ord-pname{flex:1;font-size:.82rem;font-weight:600;color:#222;line-height:1.35;min-width:0}
+.ord-pqty{font-size:.78rem;color:#888;flex-shrink:0;background:#f3f4f6;padding:2px 8px;border-radius:99px;font-weight:600}
+.ord-puprice{font-size:.76rem;color:#999;flex-shrink:0;text-align:right}
+.ord-psubtotal{font-size:.83rem;font-weight:700;color:var(--red);flex-shrink:0;text-align:right;min-width:90px}
+.ord-hint{text-align:center;padding:.5rem 0 .65rem;font-size:.72rem;color:#bbb;display:flex;align-items:center;justify-content:center;gap:.3rem;cursor:pointer;user-select:none}
+.ord-hint i{transition:transform .2s}
+.ord-card.expanded .ord-hint i{transform:rotate(180deg)}
+
+/* Detail (expanded) */
+.ord-detail{border-top:1px solid #f0f0f0;padding:.85rem 1.1rem;display:none;animation:fadeIn .2s ease}
+.ord-card.expanded .ord-detail{display:block}
+.ord-detail-code{display:flex;align-items:center;gap:.5rem;font-size:.78rem;color:#888;margin-bottom:.75rem;flex-wrap:wrap}
+.ord-detail-code strong{color:var(--red);font-size:.88rem;font-weight:800}
 
 .filter-tabs{display:flex;gap:.35rem;flex-wrap:wrap;margin-bottom:1rem}
 .ftab{background:#fff;border:1.5px solid var(--border);color:#666;padding:.32rem .85rem;border-radius:99px;font-size:.76rem;font-weight:600;cursor:pointer;transition:all var(--t)}
@@ -60,7 +70,8 @@
 @media(max-width:680px){
   .acc-wrap{grid-template-columns:1fr}
   .acc-side{position:static}
-  .ord-summary{grid-template-columns:1fr}
+  .ord-puprice{display:none}
+  .ord-psubtotal{min-width:70px}
 }
 </style>
 
@@ -110,13 +121,14 @@
       <!-- Filter tabs -->
       <?php
       $statusMap = array(
-        'all'        => array('Tất cả', '', 'fa-list'),
-        'pending'    => array('Chờ xác nhận', 'pending', 'fa-clock'),
-        'confirmed'  => array('Đã xác nhận', 'confirmed', 'fa-circle-check'),
-        'processing' => array('Đang xử lý', 'processing', 'fa-gear'),
-        'shipping'   => array('Đang giao', 'shipping', 'fa-truck'),
-        'delivered'  => array('Đã giao', 'delivered', 'fa-house-circle-check'),
-        'cancelled'  => array('Đã hủy', 'cancelled', 'fa-ban'),
+        'all'             => array('Tất cả', '', 'fa-list'),
+        'pending'         => array('Chờ xác nhận', 'pending', 'fa-clock'),
+        'pending_payment' => array('Chờ thanh toán', 'pending_payment', 'fa-credit-card'),
+        'confirmed'       => array('Đã xác nhận', 'confirmed', 'fa-circle-check'),
+        'processing'      => array('Đang xử lý', 'processing', 'fa-gear'),
+        'shipping'        => array('Đang giao hàng', 'shipping', 'fa-truck'),
+        'delivered'       => array('Đã giao hàng', 'delivered', 'fa-house-circle-check'),
+        'cancelled'       => array('Đã hủy', 'cancelled', 'fa-ban'),
       );
       $counts = array('all'=>count($orders));
       foreach($orders as $o){ $counts[$o['status']] = ($counts[$o['status']]??0)+1; }
@@ -143,44 +155,56 @@
         );
         $s = $o['status'];
         $sLabel = $statusMap[$s][0] ?? $s;
-        $sIcon = array('pending'=>'fa-clock','confirmed'=>'fa-circle-check','processing'=>'fa-gear','shipping'=>'fa-truck','delivered'=>'fa-house-circle-check','cancelled'=>'fa-ban')[$s] ?? 'fa-circle';
+        $sIcon = array('pending'=>'fa-clock','pending_payment'=>'fa-credit-card','confirmed'=>'fa-circle-check','processing'=>'fa-gear','shipping'=>'fa-truck','delivered'=>'fa-house-circle-check','cancelled'=>'fa-ban')[$s] ?? 'fa-circle';
       ?>
       <div class="ord-card" data-status="<?= $s ?>" onclick="ordToggle(this)">
+
+        <!-- Header: trạng thái · ngày · thanh toán · tổng tiền -->
         <div class="ord-head">
-          <div>
-            <div class="ord-code">#<?= $o['order_code'] ?></div>
-            <div class="ord-meta" style="margin-top:.18rem">
-              <i class="fa-regular fa-calendar"></i><?= date('d/m/Y', strtotime($o['created_at'])) ?>
-              <span style="color:#ddd">·</span>
-              <i class="fa-solid fa-box"></i><?= $o['item_count'] ?> sản phẩm
-              <span style="color:#ddd">·</span>
-              <i class="fa-solid fa-credit-card"></i><?= $paymentLabels[strtolower($o['payment_method']??'')] ?? strtoupper($o['payment_method']) ?>
-            </div>
-          </div>
           <span class="sbadge <?= $s ?>"><i class="fa-solid <?= $sIcon ?>"></i><?= $sLabel ?></span>
+          <div class="ord-meta">
+            <i class="fa-regular fa-calendar"></i><?= date('d/m/Y', strtotime($o['created_at'])) ?>
+            <span style="color:#ddd">·</span>
+            <i class="fa-solid fa-credit-card"></i><?= $paymentLabels[strtolower($o['payment_method']??'')] ?? strtoupper($o['payment_method']) ?>
+          </div>
           <div class="ord-total"><?= formatPrice($o['total']) ?></div>
-          <i class="fa-solid fa-chevron-down" style="color:#ccc;font-size:.75rem;transition:transform .2s" id="chev-<?= $o['id'] ?>"></i>
         </div>
 
-        <div class="ord-body">
-          <!-- Sản phẩm -->
+        <!-- Danh sách sản phẩm (luôn hiển thị) -->
+        <div class="ord-products">
           <?php foreach($items as $it): ?>
-          <div class="ord-item">
+          <div class="ord-prow">
             <?php if(!empty($it['image'])): ?>
-            <img class="ord-item-img" src="<?= UPLOAD_URL.htmlspecialchars($it['image']) ?>" alt="" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2248%22 height=%2248%22><rect fill=%22%23f5f5f5%22 width=%2248%22 height=%2248%22/><text x=%2224%22 y=%2230%22 text-anchor=%22middle%22 font-size=%2218%22>📦</text></svg>'">
+            <img class="ord-pimg" src="<?= UPLOAD_URL.htmlspecialchars($it['image']) ?>" alt=""
+                 onerror="this.outerHTML='<div class=\\'ord-pimg\\'><i class=\\'fa-solid fa-box\\' style=\\'color:#ccc\\'></i></div>'">
             <?php else: ?>
-            <div class="ord-item-img" style="display:flex;align-items:center;justify-content:center;font-size:1.2rem">📦</div>
+            <div class="ord-pimg"><i class="fa-solid fa-box" style="color:#ccc"></i></div>
             <?php endif; ?>
-            <div class="ord-item-name">
-              <?= htmlspecialchars($it['product_name']) ?>
-              <span>x<?= $it['quantity'] ?></span>
-            </div>
-            <div class="ord-item-price"><?= formatPrice($it['unit_price'] * $it['quantity']) ?></div>
+            <div class="ord-pname"><?= htmlspecialchars($it['product_name']) ?></div>
+            <span class="ord-pqty">x<?= $it['quantity'] ?></span>
+            <div class="ord-puprice"><?= formatPrice($it['unit_price']) ?></div>
+            <div class="ord-psubtotal"><?= formatPrice($it['unit_price'] * $it['quantity']) ?></div>
           </div>
           <?php endforeach; ?>
+          <div class="ord-hint">
+            <i class="fa-solid fa-chevron-down" id="chev-<?= $o['id'] ?>"></i>
+            <span>Chi tiết đơn hàng</span>
+          </div>
+        </div>
 
-          <!-- Tóm tắt giá -->
-          <div class="ord-summary">
+        <!-- Chi tiết mở rộng (ẩn mặc định) -->
+        <div class="ord-detail">
+          <!-- Mã đơn & thông tin -->
+          <div class="ord-detail-code">
+            <i class="fa-solid fa-receipt" style="color:var(--red)"></i>
+            Mã đơn: <strong>#<?= $o['order_code'] ?></strong>
+            <span style="color:#ddd">·</span>
+            <i class="fa-regular fa-calendar" style="opacity:.6"></i>
+            <?= date('d/m/Y H:i', strtotime($o['created_at'])) ?>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem 1.5rem">
+            <!-- Cột trái: tóm tắt giá -->
             <div>
               <div class="ord-sum-row"><span class="lbl">Tạm tính</span><span><?= formatPrice($o['subtotal']??$o['total']) ?></span></div>
               <?php if(($o['shipping_fee']??0)>0): ?>
@@ -193,6 +217,7 @@
               <?php endif; ?>
               <div class="ord-sum-row total" style="margin-top:.4rem;padding-top:.4rem;border-top:1px dashed #eee"><span>Tổng cộng</span><span><?= formatPrice($o['total']) ?></span></div>
             </div>
+            <!-- Cột phải: địa chỉ, ghi chú, nút -->
             <div>
               <?php if(!empty($o['address'])): ?>
               <div class="ord-sum-row" style="align-items:flex-start">
@@ -206,9 +231,8 @@
                 <span style="text-align:right;font-size:.76rem;color:#888;font-style:italic"><?= htmlspecialchars($o['notes']) ?></span>
               </div>
               <?php endif; ?>
-              <!-- Actions -->
               <div style="display:flex;gap:.5rem;margin-top:.75rem;justify-content:flex-end">
-                <?php if($s==='pending'): ?>
+                <?php if($s==='pending'||$s==='pending_payment'): ?>
                 <button class="ord-cancel-btn" onclick="event.stopPropagation();ordCancel(<?= $o['id'] ?>,'<?= $o['order_code'] ?>')">
                   <i class="fa-solid fa-xmark"></i> Hủy đơn
                 </button>
@@ -241,14 +265,8 @@ function ordToggle(card){
   var isOpen=card.classList.contains('expanded');
   document.querySelectorAll('.ord-card.expanded').forEach(function(c){
     c.classList.remove('expanded');
-    var ch=c.querySelector('[id^="chev-"]');
-    if(ch) ch.style.transform='';
   });
-  if(!isOpen){
-    card.classList.add('expanded');
-    var id=card.querySelector('[id^="chev-"]');
-    if(id) id.style.transform='rotate(180deg)';
-  }
+  if(!isOpen) card.classList.add('expanded');
 }
 function ordFilter(key, btn){
   document.querySelectorAll('.ftab').forEach(function(b){b.classList.remove('active');});

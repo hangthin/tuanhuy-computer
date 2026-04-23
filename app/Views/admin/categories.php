@@ -23,7 +23,7 @@
         <tbody>
           <?php foreach($categories as $cat): ?>
           <tr>
-            <td style="text-align:center;font-size:1.2rem"><?= $cat['icon'] ?></td>
+            <td style="text-align:center"><i class="fa-solid <?= htmlspecialchars($cat['icon'] ?: 'fa-tag') ?>" style="color:#aaa;font-size:.95rem"></i></td>
             <td>
               <div style="font-weight:600;color:#ddd"><?= htmlspecialchars($cat['name']) ?></div>
               <?php if(!empty($cat['description'])): ?>
@@ -66,18 +66,26 @@
       </div>
 
       <div style="margin-bottom:.65rem">
-        <label style="font-size:.72rem;color:#666;display:block;margin-bottom:.25rem">Icon (emoji)</label>
-        <div style="display:flex;gap:.4rem">
-          <input type="text" name="icon" id="cat-icon" class="form-inp" placeholder="💻" style="max-width:70px;text-align:center;font-size:1.2rem">
-          <div style="display:flex;gap:.2rem;flex-wrap:wrap;align-items:center">
-            <?php foreach(['🖥️','💻','📺','🖱️','⌨️','💾','⚡','🎮','💿','🔧','🎧','📦','🖨️','📱','🔌'] as $em): ?>
-            <span onclick="document.getElementById('cat-icon').value='<?= $em ?>'"
-                  style="cursor:pointer;font-size:1.1rem;padding:2px;border-radius:4px;transition:.1s"
-                  onmouseover="this.style.background='#2a2a2a'" onmouseout="this.style.background=''">
-              <?= $em ?>
-            </span>
-            <?php endforeach; ?>
-          </div>
+        <label style="font-size:.72rem;color:#666;display:block;margin-bottom:.25rem">Icon <span style="color:#444">(Font Awesome class)</span></label>
+        <div style="display:flex;gap:.4rem;align-items:center;margin-bottom:.35rem">
+          <input type="text" name="icon" id="cat-icon" class="form-inp" placeholder="fa-laptop" style="flex:1;font-size:.78rem">
+          <i id="cat-icon-preview" class="fa-solid fa-tag" style="color:#aaa;font-size:1.1rem;width:24px;text-align:center"></i>
+        </div>
+        <div style="display:flex;gap:.3rem;flex-wrap:wrap">
+          <?php foreach([
+            'fa-desktop','fa-laptop','fa-tv','fa-computer-mouse','fa-keyboard',
+            'fa-memory','fa-microchip','fa-gamepad','fa-hard-drive','fa-screwdriver-wrench',
+            'fa-headphones','fa-box','fa-print','fa-mobile-screen','fa-plug',
+            'fa-server','fa-fan','fa-display','fa-bolt','fa-tag'
+          ] as $ic): ?>
+          <button type="button" onclick="setIcon('<?= $ic ?>')"
+                  title="<?= $ic ?>"
+                  style="width:30px;height:30px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s"
+                  onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'"
+                  onmouseout="this.style.borderColor='#2a2a2a';this.style.color=''">
+            <i class="fa-solid <?= $ic ?>" style="font-size:.8rem;color:#888;pointer-events:none"></i>
+          </button>
+          <?php endforeach; ?>
         </div>
       </div>
 
@@ -110,11 +118,22 @@
 </div>
 
 <script>
+function setIcon(cls) {
+  document.getElementById('cat-icon').value = cls;
+  updateIconPreview(cls);
+}
+function updateIconPreview(cls) {
+  var prev = document.getElementById('cat-icon-preview');
+  prev.className = 'fa-solid ' + (cls || 'fa-tag');
+}
+document.getElementById('cat-icon').addEventListener('input', function(){ updateIconPreview(this.value.trim()); });
+
 function catEdit(cat) {
   document.getElementById('cat-form-title').innerHTML = '<i class="fas fa-edit" style="color:#60a5fa;margin-right:.35rem"></i>Sửa: ' + cat.name;
   document.getElementById('cat-id').value     = cat.id;
   document.getElementById('cat-name').value   = cat.name;
   document.getElementById('cat-icon').value   = cat.icon || '';
+  updateIconPreview(cat.icon || '');
   document.getElementById('cat-desc').value   = cat.description || '';
   document.getElementById('cat-sort').value   = cat.sort_order || 0;
   document.getElementById('cat-active').value = cat.is_active ? '1' : '0';
@@ -122,8 +141,9 @@ function catEdit(cat) {
 }
 function catReset() {
   document.getElementById('cat-form-title').innerHTML = '<i class="fas fa-plus" style="color:var(--red);margin-right:.35rem"></i>Thêm danh mục';
-  document.getElementById('cat-id').value     = '0';
+  document.getElementById('cat-id').value = '0';
   document.getElementById('cat-form').reset();
+  updateIconPreview('');
 }
 </script>
 

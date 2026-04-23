@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__.'/../Models/Models.php';
 require_once __DIR__.'/../Models/ProductModel.php';
+require_once __DIR__.'/../Helpers/Logger.php';
 
 class ApiController {
 
@@ -89,20 +90,56 @@ class ApiController {
 
     // ── COUPON ────────────────────────────────────────────────
     public function coupon($action = null) {
-        $b    = json_decode(file_get_contents('php://input'), true) ?? array();
+        header('Content-Type: application/json');
+        $db = Database::getInstance();
+
+        // REMOVE: xóa coupon khỏi session
+        if ($action === 'remove') {
+            unset($_SESSION['applied_coupon']);
+            $items = (new CartModel())->getItems();
+            $sub   = calcCartSubtotal($items);
+            $ship  = $sub >= 500000 ? 0 : 30000;
+            echo json_encode(array('success'=>true,'subtotal'=>$sub,'shipping'=>$ship,'new_total'=>$sub+$ship));
+            return;
+        }
+
+        // CHECK / APPLY
+        $b    = json_decode(file_get_contents('php://input'), true) ?: array();
         $code = strtoupper(trim($b['code'] ?? ''));
-        $db   = Database::getInstance();
-        $c    = $db->fetch("SELECT * FROM coupons WHERE code=? AND is_active=1", array($code));
-        if (!$c) { echo json_encode(array('success'=>false,'message'=>'Mã không hợp lệ')); return; }
+        if (!$code) { echo json_encode(array('success'=>false,'message'=>'Vui lòng nhập mã')); return; }
+
+        $c = $db->fetch("SELECT * FROM coupons WHERE code=? AND is_active=1", array($code));
+        if (!$c)                                                       { echo json_encode(array('success'=>false,'message'=>'Mã không hợp lệ')); return; }
         if ($c['expires_at'] && strtotime($c['expires_at']) < time()) { echo json_encode(array('success'=>false,'message'=>'Mã đã hết hạn')); return; }
-        if ($c['used_count'] >= $c['usage_limit']) { echo json_encode(array('success'=>false,'message'=>'Mã đã hết lượt')); return; }
+        if ((int)$c['used_count'] >= (int)$c['usage_limit'])          { echo json_encode(array('success'=>false,'message'=>'Mã đã hết lượt sử dụng')); return; }
+
         $items = (new CartModel())->getItems();
         $sub   = calcCartSubtotal($items);
-        if ($sub < $c['min_order']) { echo json_encode(array('success'=>false,'message'=>'Đơn tối thiểu '.formatPrice($c['min_order']))); return; }
-        $disc = $c['type'] === 'percent' ? $sub * $c['value'] / 100 : (float)$c['value'];
+        if ($sub < (float)$c['min_order']) { echo json_encode(array('success'=>false,'message'=>'Đơn tối thiểu '.formatPrice($c['min_order']))); return; }
+
+        $disc = $c['type'] === 'percent' ? $sub * (float)$c['value'] / 100 : (float)$c['value'];
         if ($c['max_discount']) $disc = min($disc, (float)$c['max_discount']);
+        $disc = min($disc, $sub);
         $ship = $sub >= 500000 ? 0 : 30000;
-        echo json_encode(array('success'=>true,'message'=>'Giảm '.formatPrice($disc),'discount'=>$disc,'new_total'=>max(0,$sub+$ship-$disc)));
+
+        // Lưu session để checkout đọc
+        $_SESSION['applied_coupon'] = array(
+            'code'    => $code,
+            'discount'=> $disc,
+            'type'    => $c['type'],
+            'value'   => (float)$c['value'],
+            'message' => 'Giảm '.formatPrice($disc),
+        );
+
+        echo json_encode(array(
+            'success'  => true,
+            'message'  => 'Áp dụng thành công! Giảm '.formatPrice($disc),
+            'discount' => $disc,
+            'subtotal' => $sub,
+            'shipping' => $ship,
+            'new_total'=> max(0, $sub + $ship - $disc),
+            'code'     => $code,
+        ));
     }
 
     // ── REVIEW ────────────────────────────────────────────────
@@ -178,9 +215,26 @@ class ApiController {
                 }
 
                 if ($imgUrl && filter_var($imgUrl, FILTER_VALIDATE_URL)) {
-                    $ctx  = stream_context_create(array('http'=>array('timeout'=>15,'user_agent'=>'Mozilla/5.0')));
-                    $data = @file_get_contents($imgUrl, false, $ctx);
-                    if (!$data) { echo json_encode(array('success'=>false,'message'=>'Không tải được ảnh từ URL')); return; }
+                    $ch = curl_init($imgUrl);
+                    curl_setopt_array($ch, array(
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_TIMEOUT        => 20,
+                        CURLOPT_SSL_VERIFYPEER => false,
+                        CURLOPT_FOLLOWLOCATION => true,
+                        CURLOPT_MAXREDIRS      => 5,
+                        CURLOPT_HTTPHEADER     => array(
+                            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                            'Accept: image/webp,image/apng,image/*,*/*;q=0.8',
+                            'Referer: https://www.google.com/',
+                        ),
+                    ));
+                    $data    = curl_exec($ch);
+                    $curlErr = curl_error($ch);
+                    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    curl_close($ch);
+                    if (!$data || $curlErr || $httpCode < 200 || $httpCode >= 400) {
+                        echo json_encode(array('success'=>false,'message'=>'Không tải được ảnh từ URL (HTTP '.$httpCode.')')); return;
+                    }
                     $ext = 'jpg';
                     if (function_exists('finfo_buffer')) {
                         $fi   = finfo_open(FILEINFO_MIME_TYPE);
@@ -244,7 +298,7 @@ class ApiController {
                     'sku'         => $this->makeUniqueSku($db, sanitize($b['sku'] ?? '')),
                     'short_desc'  => sanitize($b['short_desc'] ?? ''),
                     'description' => sanitize($b['description'] ?? ''),
-                    'price'       => min(100000000, max(1000000, (float)($b['price'] ?? 0))),
+                    'price'       => min(200000000, max(1000000, (float)($b['price'] ?? 0))),
                     'sale_price'  => (!empty($b['sale_price']) && (float)$b['sale_price'] > 0) ? (float)$b['sale_price'] : null,
                     'stock'       => (int)($b['stock'] ?? 10),
                     'image'       => sanitize($b['image_filename'] ?? '') ?: null,
@@ -388,12 +442,7 @@ class ApiController {
                         return;
                     }
                 }
-                if ($curlErr || $code !== 200) {
-                    $err = json_decode($resp ?? '', true);
-                    $msg = isset($err['error']) ? $err['error'] : 'HTTP '.$code;
-                    echo json_encode(array('success'=>false,'message'=>'SerpApi: '.$msg));
-                    return;
-                }
+                // SerpApi failed or empty — fall through to next provider
             }
 
             // ── Bing Image Search ──────────────────────────────────
@@ -412,26 +461,25 @@ class ApiController {
                 $code    = curl_getinfo($ch, CURLINFO_HTTP_CODE);
                 $curlErr = curl_error($ch);
                 curl_close($ch);
-                if ($curlErr) { echo json_encode(array('success'=>false,'message'=>'Lỗi kết nối Bing: '.$curlErr)); return; }
-                if ($code !== 200) {
-                    $err = json_decode($resp, true);
-                    $msg = isset($err['error']['message']) ? $err['error']['message'] : 'HTTP '.$code;
-                    echo json_encode(array('success'=>false,'message'=>'Bing API: '.$msg)); return;
-                }
-                $data = json_decode($resp, true);
-                $images = array();
-                if (!empty($data['value'])) {
-                    foreach ($data['value'] as $item) {
-                        $images[] = array(
-                            'url'    => $item['contentUrl'],
-                            'thumb'  => $item['thumbnailUrl'],
-                            'title'  => $item['name'] ?? '',
-                            'source' => isset($item['hostPageDisplayUrl']) ? parse_url($item['hostPageDisplayUrl'], PHP_URL_HOST) : '',
-                        );
+                if (!$curlErr && $code === 200) {
+                    $data = json_decode($resp, true);
+                    $images = array();
+                    if (!empty($data['value'])) {
+                        foreach ($data['value'] as $item) {
+                            $images[] = array(
+                                'url'    => $item['contentUrl'],
+                                'thumb'  => $item['thumbnailUrl'],
+                                'title'  => $item['name'] ?? '',
+                                'source' => isset($item['hostPageDisplayUrl']) ? parse_url($item['hostPageDisplayUrl'], PHP_URL_HOST) : '',
+                            );
+                        }
+                    }
+                    if (!empty($images)) {
+                        echo json_encode(array('success'=>true,'images'=>$images,'query'=>$searchQ,'count'=>count($images),'provider'=>'bing'));
+                        return;
                     }
                 }
-                echo json_encode(array('success'=>true,'images'=>$images,'query'=>$searchQ,'count'=>count($images),'provider'=>'bing'));
-                return;
+                // Bing failed or empty — fall through to next provider
             }
 
             // ── Pexels Image Search ────────────────────────────────
@@ -468,6 +516,7 @@ class ApiController {
                         return;
                     }
                 }
+                // Pexels failed or empty — fall through to next provider
             }
 
             // ── Pixabay Image Search ───────────────────────────────
@@ -493,26 +542,25 @@ class ApiController {
                 $code    = curl_getinfo($ch, CURLINFO_HTTP_CODE);
                 $curlErr = curl_error($ch);
                 curl_close($ch);
-                if ($curlErr) { echo json_encode(array('success'=>false,'message'=>'Lỗi kết nối Pixabay: '.$curlErr)); return; }
-                if ($code !== 200) {
-                    $detail = trim(strip_tags($resp));
-                    $detail = mb_substr($detail, 0, 120);
-                    echo json_encode(array('success'=>false,'message'=>'Pixabay API: HTTP '.$code.($detail?' — '.$detail:''))); return;
-                }
-                $data = json_decode($resp, true);
-                $images = array();
-                if (!empty($data['hits'])) {
-                    foreach ($data['hits'] as $item) {
-                        $images[] = array(
-                            'url'    => $item['webformatURL'],
-                            'thumb'  => $item['previewURL'],
-                            'title'  => $item['tags'] ?? '',
-                            'source' => 'pixabay.com',
-                        );
+                if (!$curlErr && $code === 200) {
+                    $data = json_decode($resp, true);
+                    $images = array();
+                    if (!empty($data['hits'])) {
+                        foreach ($data['hits'] as $item) {
+                            $images[] = array(
+                                'url'    => $item['webformatURL'],
+                                'thumb'  => $item['previewURL'],
+                                'title'  => $item['tags'] ?? '',
+                                'source' => 'pixabay.com',
+                            );
+                        }
+                    }
+                    if (!empty($images)) {
+                        echo json_encode(array('success'=>true,'images'=>$images,'query'=>$query,'count'=>count($images),'provider'=>'pixabay'));
+                        return;
                     }
                 }
-                echo json_encode(array('success'=>true,'images'=>$images,'query'=>$query,'count'=>count($images),'provider'=>'pixabay'));
-                return;
+                // Pixabay failed or empty — fall through to next provider
             }
 
             // ── Google Custom Search ───────────────────────────────
@@ -533,32 +581,28 @@ class ApiController {
                 $code    = curl_getinfo($ch, CURLINFO_HTTP_CODE);
                 $curlErr = curl_error($ch);
                 curl_close($ch);
-                if ($curlErr) { echo json_encode(array('success'=>false,'message'=>'Lỗi kết nối Google: '.$curlErr)); return; }
-                if ($code !== 200) {
-                    $err = json_decode($resp, true);
-                    $msg = isset($err['error']['message']) ? $err['error']['message'] : 'HTTP '.$code;
-                    if (strpos($msg, 'does not have') !== false || strpos($msg, 'billing') !== false) {
-                        $msg .= ' — Cần bật billing tại console.cloud.google.com/billing hoặc cấu hình BING_SEARCH_KEY để dùng Bing thay thế.';
+                if (!$curlErr && $code === 200) {
+                    $data = json_decode($resp, true);
+                    $images = array();
+                    if (!empty($data['items'])) {
+                        foreach ($data['items'] as $item) {
+                            $images[] = array(
+                                'url'    => $item['link'],
+                                'thumb'  => isset($item['image']['thumbnailLink']) ? $item['image']['thumbnailLink'] : $item['link'],
+                                'title'  => $item['title'] ?? '',
+                                'source' => $item['displayLink'] ?? '',
+                            );
+                        }
                     }
-                    echo json_encode(array('success'=>false,'message'=>'Google API: '.$msg)); return;
-                }
-                $data = json_decode($resp, true);
-                $images = array();
-                if (!empty($data['items'])) {
-                    foreach ($data['items'] as $item) {
-                        $images[] = array(
-                            'url'    => $item['link'],
-                            'thumb'  => isset($item['image']['thumbnailLink']) ? $item['image']['thumbnailLink'] : $item['link'],
-                            'title'  => $item['title'] ?? '',
-                            'source' => $item['displayLink'] ?? '',
-                        );
+                    if (!empty($images)) {
+                        echo json_encode(array('success'=>true,'images'=>$images,'query'=>$searchQ,'count'=>count($images),'provider'=>'google'));
+                        return;
                     }
                 }
-                echo json_encode(array('success'=>true,'images'=>$images,'query'=>$searchQ,'count'=>count($images),'provider'=>'google'));
-                return;
+                // Google failed or empty — fall through
             }
 
-            echo json_encode(array('success'=>false,'message'=>'Chưa cấu hình API tìm ảnh. Thêm PEXELS_KEY, BING_SEARCH_KEY hoặc GOOGLE_SEARCH_KEY + GOOGLE_SEARCH_CX vào config/app.php'));
+            echo json_encode(array('success'=>false,'message'=>'Không tìm được ảnh. Thử từ khóa khác hoặc kiểm tra API keys trong config/app.php'));
             return;
         }
 
@@ -637,6 +681,11 @@ class ApiController {
                 file_put_contents($newPath, $resp);
             }
 
+            $logPid = (int)($b['product_id'] ?? 0);
+            Logger::logActivity('Tách nền ảnh', 'products', $logPid ?: null, array_filter([
+                'name'  => $b['product_name'] ?? null,
+                'image' => $newFname,
+            ]));
             echo json_encode(array('success'=>true,'filename'=>$newFname,'url'=>UPLOAD_URL.$newFname));
             return;
         }
@@ -780,6 +829,11 @@ class ApiController {
             else                imagejpeg($img, $newPath, 92);
             imagedestroy($img);
 
+            $logPid = (int)($b['product_id'] ?? 0);
+            Logger::logActivity('Gắn logo', 'products', $logPid ?: null, array_filter([
+                'name'  => $b['product_name'] ?? null,
+                'image' => $newFname,
+            ]));
             echo json_encode(array('success'=>true,'filename'=>$newFname,'url'=>UPLOAD_URL.$newFname));
             return;
         }
@@ -836,6 +890,9 @@ class ApiController {
                     $saved++;
                 }
             }
+            if ($saved > 0) {
+                Logger::logActivity('Thêm ảnh phụ', 'products', $pid, array('saved' => $saved));
+            }
             echo json_encode(array('success'=>true,'saved'=>$saved)); return;
         }
 
@@ -868,10 +925,11 @@ GIÁ VND (bắt buộc trong khoảng hợp lý, KHÔNG được vượt quá gi
 - CPU AMD Ryzen 5: 3.000.000–6.000.000 | Ryzen 7: 6.000.000–11.000.000 | Ryzen 9: 10.000.000–22.000.000
 - GPU RTX 3060: 7.000.000–12.000.000 | RTX 4060: 9.000.000–14.000.000 | RTX 4070: 13.000.000–20.000.000 | RTX 4090: 35.000.000–55.000.000
 - Màn hình 24": 2.500.000–8.000.000 | 27": 4.000.000–15.000.000
-- Laptop phổ thông: 8.000.000–18.000.000 | Laptop tầm trung: 18.000.000–30.000.000 | Laptop cao cấp: 30.000.000–70.000.000
+- Laptop phổ thông: 8.000.000–18.000.000 | Laptop tầm trung: 18.000.000–30.000.000 | Laptop cao cấp: 30.000.000–80.000.000
+- MacBook Air M2/M3: 25.000.000–40.000.000 | MacBook Pro 14" M3/M4: 45.000.000–80.000.000 | MacBook Pro 16" M3/M4 Pro/Max: 75.000.000–160.000.000
 - Mainboard: 2.000.000–10.000.000 | Case: 500.000–4.000.000 | PSU: 600.000–4.000.000
 - price là số nguyên VND (ví dụ: 3500000). sale_price = 0 nếu không khuyến mãi.
-- Giới hạn tối đa tuyệt đối: price <= 100.000.000
+- Giới hạn tối đa tuyệt đối: price <= 200.000.000
 category_id và brand_id lấy từ danh sách trên. Specs 5-8 thông số. Key tiếng Việt.';
 
         $content = array();
@@ -894,7 +952,7 @@ category_id và brand_id lấy từ danh sách trên. Specs 5-8 thông số. Key
         foreach ($cats   as $c)  $catList   .= "id={$c['id']} name={$c['name']} slug={$c['slug']}\n";
         foreach ($brands as $br) $brandList .= "id={$br['id']} name={$br['name']}\n";
 
-        $prompt = 'Bạn là chuyên gia sản phẩm công nghệ máy tính Việt Nam. Dựa tên sản phẩm, điền thông tin đầy đủ.
+        $prompt = 'Bạn là chuyên gia sản phẩm công nghệ máy tính Việt Nam. Dựa tên sản phẩm, điền thông tin đầy đủ và CHÍNH XÁC theo thực tế thị trường.
 
 Tên sản phẩm: '.$productName.'
 
@@ -905,16 +963,18 @@ THƯƠNG HIỆU:
 Trả về DUY NHẤT JSON (không markdown):
 {"name":"tên đầy đủ","brand":"hãng","brand_id":null,"category_id":0,"category_slug":"","short_desc":"60-80 từ tiếng Việt","description":"130-180 từ tiếng Việt","price":0,"sale_price":0,"stock":10,"sku":"BRAND-MODEL","warranty":24,"specs":{"Thông số":"Giá trị"}}
 
-GIÁ VND (bắt buộc trong khoảng hợp lý, KHÔNG được vượt quá giới hạn):
+GIÁ VND (đặt đúng theo thực tế thị trường VN hiện tại):
 - Chuột: 150.000–5.000.000 | Bàn phím: 200.000–8.000.000 | Tai nghe: 200.000–6.000.000
 - RAM 8GB: 300.000–600.000 | 16GB: 600.000–1.200.000 | 32GB: 1.200.000–2.500.000
 - SSD 256GB: 400.000–700.000 | 500GB: 600.000–1.200.000 | 1TB: 1.000.000–2.500.000
 - CPU i3: 2tr–4tr | i5: 3.5tr–7tr | i7: 7tr–12tr | i9: 12tr–25tr | Ryzen 5: 3tr–6tr | Ryzen 7: 6tr–11tr
 - GPU RTX 3060: 7tr–12tr | RTX 4060: 9tr–14tr | RTX 4070: 13tr–20tr | RTX 4090: 35tr–55tr
-- Laptop phổ thông: 8tr–18tr | tầm trung: 18tr–30tr | cao cấp: 30tr–70tr
-- Màn hình 24": 2.5tr–8tr | 27": 4tr–15tr | Mainboard: 2tr–10tr
-- price là số nguyên VND. sale_price=0 nếu không KM. Giới hạn tối đa: 100.000.000
-category_id brand_id từ danh sách trên. Specs 5-8 thông số tiếng Việt.';
+- Laptop phổ thông: 8tr–18tr | tầm trung: 18tr–30tr | cao cấp: 30tr–80tr
+- MacBook Air M2/M3: 25tr–40tr | MacBook Pro 14" M3/M4: 45tr–80tr | MacBook Pro 16" M3/M4 Pro/Max: 75tr–160tr
+- Màn hình 24": 2.5tr–8tr | 27": 4tr–15tr | Mainboard: 2tr–10tr | Case: 500k–4tr | PSU: 600k–4tr
+- price là số nguyên VND, PHẢI phản ánh đúng cấu hình thực tế (chip, RAM, SSD). sale_price=0 nếu không KM.
+- Giới hạn tối đa tuyệt đối: 200.000.000
+category_id brand_id từ danh sách trên. Specs 6-10 thông số tiếng Việt, đầy đủ chi tiết cấu hình.';
 
         return $this->callGroq(array(array('role'=>'user','content'=>$prompt)), $apiKey);
     }
@@ -1035,4 +1095,445 @@ category_id brand_id từ danh sách trên. Specs 5-8 thông số tiếng Việt
         }
         return $sku;
     }
+
+    // ── Asset Manager API ──────────────────────────────────────
+    public function admin($action = null) {
+        if (!isAdmin()) { echo json_encode(array('ok'=>false,'message'=>'Unauthorized')); return; }
+
+        // ── search-images ─────────────────────────────────────
+        if ($action === 'search-images') {
+            $q = trim($_GET['q'] ?? '');
+            if (!$q) { echo json_encode(array('ok'=>false,'message'=>'Thiếu từ khóa')); return; }
+
+            $images = array();
+            $errors = array();
+
+            // ── 1. Pixabay (free, no billing required) ────────
+            $pxKey = defined('PIXABAY_KEY') ? PIXABAY_KEY : '';
+            if ($pxKey && empty($images)) {
+                $url = 'https://pixabay.com/api/?'
+                     . http_build_query(array('key'=>$pxKey,'q'=>$q,'image_type'=>'photo','per_page'=>10,'safesearch'=>'true','lang'=>'en'));
+                $ch  = curl_init($url);
+                curl_setopt_array($ch, array(CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>10,CURLOPT_SSL_VERIFYPEER=>false));
+                $res  = curl_exec($ch);
+                $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+                $data = json_decode($res, true);
+                if ($code === 200 && !empty($data['hits'])) {
+                    foreach ($data['hits'] as $h) {
+                        $images[] = array(
+                            'url'   => $h['largeImageURL']  ?? $h['webformatURL'] ?? '',
+                            'thumb' => $h['webformatURL']   ?? '',
+                            'title' => $h['tags']           ?? '',
+                        );
+                    }
+                } else {
+                    $errors[] = 'Pixabay: HTTP '.$code;
+                }
+            }
+
+            // ── 2. Pexels (free) ──────────────────────────────
+            $pexKey = defined('PEXELS_KEY') ? PEXELS_KEY : '';
+            if ($pexKey && empty($images)) {
+                $url = 'https://api.pexels.com/v1/search?'
+                     . http_build_query(array('query'=>$q,'per_page'=>10,'orientation'=>'landscape'));
+                $ch  = curl_init($url);
+                curl_setopt_array($ch, array(
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_TIMEOUT        => 10,
+                    CURLOPT_SSL_VERIFYPEER => false,
+                    CURLOPT_HTTPHEADER     => array('Authorization: '.$pexKey),
+                ));
+                $res  = curl_exec($ch);
+                $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+                $data = json_decode($res, true);
+                if ($code === 200 && !empty($data['photos'])) {
+                    foreach ($data['photos'] as $p) {
+                        $images[] = array(
+                            'url'   => $p['src']['large']  ?? $p['src']['medium'] ?? '',
+                            'thumb' => $p['src']['medium'] ?? $p['src']['small']  ?? '',
+                            'title' => $p['alt']           ?? '',
+                        );
+                    }
+                } else {
+                    $errors[] = 'Pexels: HTTP '.$code;
+                }
+            }
+
+            // ── 3. SerpAPI Google Images ──────────────────────
+            $serpKey = defined('SERPAPI_KEY') ? SERPAPI_KEY : '';
+            if ($serpKey && empty($images)) {
+                $url = 'https://serpapi.com/search?'
+                     . http_build_query(array('engine'=>'google_images','q'=>$q,'api_key'=>$serpKey,'num'=>10,'safe'=>'active'));
+                $ch  = curl_init($url);
+                curl_setopt_array($ch, array(CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>12,CURLOPT_SSL_VERIFYPEER=>false));
+                $res  = curl_exec($ch);
+                $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+                $data = json_decode($res, true);
+                if ($code === 200 && !empty($data['images_results'])) {
+                    foreach (array_slice($data['images_results'], 0, 10) as $img) {
+                        $images[] = array(
+                            'url'   => $img['original']  ?? '',
+                            'thumb' => $img['thumbnail'] ?? $img['original'] ?? '',
+                            'title' => $img['title']     ?? '',
+                        );
+                    }
+                } else {
+                    $errors[] = 'SerpAPI: HTTP '.$code;
+                }
+            }
+
+            // ── 4. Google Custom Search (requires billing) ────
+            $gKey = defined('GOOGLE_SEARCH_KEY') ? GOOGLE_SEARCH_KEY : '';
+            $gCx  = defined('GOOGLE_SEARCH_CX')  ? GOOGLE_SEARCH_CX  : '';
+            if ($gKey && $gCx && empty($images)) {
+                $url = 'https://www.googleapis.com/customsearch/v1?'
+                     . http_build_query(array('key'=>$gKey,'cx'=>$gCx,'q'=>$q,'searchType'=>'image','num'=>10));
+                $ch  = curl_init($url);
+                curl_setopt_array($ch, array(CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>12,CURLOPT_SSL_VERIFYPEER=>false));
+                $res  = curl_exec($ch);
+                $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+                $data = json_decode($res, true);
+                if ($code === 200 && !empty($data['items'])) {
+                    foreach ($data['items'] as $item) {
+                        $images[] = array(
+                            'url'   => $item['link']                   ?? '',
+                            'thumb' => $item['image']['thumbnailLink'] ?? $item['link'] ?? '',
+                            'title' => $item['title']                  ?? '',
+                        );
+                    }
+                } else {
+                    $errors[] = 'Google: '.($data['error']['message'] ?? 'HTTP '.$code);
+                }
+            }
+
+            if (empty($images)) {
+                $msg = 'Không tìm được ảnh';
+                if (!empty($errors)) $msg .= ' ('.implode('; ', $errors).')';
+                echo json_encode(array('ok'=>false,'message'=>$msg)); return;
+            }
+            // filter out empty URLs
+            $images = array_values(array_filter($images, function($i) { return !empty($i['url']); }));
+            echo json_encode(array('ok'=>true,'images'=>$images,'source'=>'ok'));
+            return;
+        }
+
+        // ── suggest-products ──────────────────────────────────
+        if ($action === 'suggest-products') {
+            $q = trim($_GET['q'] ?? '');
+            if (!$q || strlen($q) < 2) { echo json_encode(array()); return; }
+            $db   = Database::getInstance();
+            $rows = $db->fetchAll(
+                "SELECT name FROM products WHERE is_deleted=0 AND is_active=1 AND name LIKE ? ORDER BY name LIMIT 8",
+                array('%'.$q.'%')
+            );
+            echo json_encode(array_column($rows, 'name'));
+            return;
+        }
+
+        // ── get-assets ────────────────────────────────────────
+        if ($action === 'get-assets') {
+            $json = __DIR__ . '/../../assets/images/approved.json';
+            $data = file_exists($json) ? (json_decode(file_get_contents($json), true) ?: array()) : array();
+            echo json_encode(array('ok'=>true,'assets'=>$data));
+            return;
+        }
+
+        // ── approve-asset ─────────────────────────────────────
+        if ($action === 'approve-asset') {
+            $b       = json_decode(file_get_contents('php://input'), true) ?? array();
+            $comp    = preg_replace('/[^a-z0-9\-]/', '', $b['component'] ?? '');
+            $imgUrl  = $b['url']        ?? '';
+            $imgB64  = $b['image_b64']  ?? '';
+            $imgMime = $b['image_mime'] ?? 'image/jpeg';
+            if (!$comp) { echo json_encode(array('ok'=>false,'message'=>'Thiếu component')); return; }
+            if (!$imgUrl && !$imgB64) { echo json_encode(array('ok'=>false,'message'=>'Thiếu dữ liệu ảnh')); return; }
+
+            $dir    = __DIR__ . '/../../assets/images/';
+            if (!is_dir($dir)) mkdir($dir, 0755, true);
+            $extMap = array('image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp','image/gif'=>'gif');
+            $imgData = '';
+            $ext     = 'jpg';
+
+            if ($imgB64) {
+                // ── base64 path (Upload / Clipboard) ──────────
+                $raw     = preg_replace('/^data:[^;]+;base64,/i', '', $imgB64);
+                $imgData = base64_decode(str_replace(' ', '+', $raw), true);
+                if (!$imgData || strlen($imgData) < 100) {
+                    echo json_encode(array('ok'=>false,'message'=>'Dữ liệu base64 không hợp lệ')); return;
+                }
+                $ext = $extMap[$imgMime] ?? 'jpg';
+                if (function_exists('finfo_buffer')) {
+                    $fi  = finfo_open(FILEINFO_MIME_TYPE);
+                    $det = finfo_buffer($fi, $imgData);
+                    finfo_close($fi);
+                    $ext = $extMap[$det] ?? $ext;
+                }
+            } else {
+                // ── URL download path (Search / URL tab) ──────
+                if (!filter_var($imgUrl, FILTER_VALIDATE_URL)) {
+                    echo json_encode(array('ok'=>false,'message'=>'URL không hợp lệ')); return;
+                }
+                $ch = curl_init($imgUrl);
+                curl_setopt_array($ch, array(
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_TIMEOUT        => 20,
+                    CURLOPT_SSL_VERIFYPEER => false,
+                    CURLOPT_FOLLOWLOCATION => true,
+                    CURLOPT_MAXREDIRS      => 5,
+                    CURLOPT_USERAGENT      => 'Mozilla/5.0',
+                ));
+                $imgData  = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+                if (!$imgData || $httpCode < 200 || $httpCode >= 400) {
+                    echo json_encode(array('ok'=>false,'message'=>'Không tải được ảnh (HTTP '.$httpCode.')')); return;
+                }
+                if (function_exists('finfo_buffer')) {
+                    $fi   = finfo_open(FILEINFO_MIME_TYPE);
+                    $mime = finfo_buffer($fi, $imgData);
+                    finfo_close($fi);
+                    $ext  = $extMap[$mime] ?? 'jpg';
+                } else {
+                    $ext = strtolower(pathinfo(parse_url($imgUrl, PHP_URL_PATH), PATHINFO_EXTENSION));
+                    if (!in_array($ext, array('jpg','jpeg','png','webp','gif'))) $ext = 'jpg';
+                    if ($ext === 'jpeg') $ext = 'jpg';
+                }
+            }
+
+            // Xóa tất cả file cũ của component này (mọi đuôi) trước khi lưu mới
+            foreach (array('jpg','jpeg','png','webp','gif') as $_e) {
+                $_old = $dir . $comp . '.' . $_e;
+                if (file_exists($_old)) @unlink($_old);
+            }
+            $fname    = $comp . '.' . $ext;
+            file_put_contents($dir . $fname, $imgData);
+            $jsonFile = $dir . 'approved.json';
+            $approved = file_exists($jsonFile) ? (json_decode(file_get_contents($jsonFile), true) ?: array()) : array();
+            $ts       = time();
+            $assetUrl = APP_URL . '/assets/images/' . $fname . '?t=' . $ts;
+            $approved[$comp] = array('url'=>$assetUrl, 'filename'=>$fname, 'approved_at'=>date('Y-m-d H:i:s'));
+            file_put_contents($jsonFile, json_encode($approved, JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE));
+            echo json_encode(array('ok'=>true,'url'=>$assetUrl,'filename'=>$fname));
+            return;
+        }
+
+        // ── deploy-homepage ───────────────────────────────────
+        if ($action === 'deploy-homepage') {
+            $target   = __DIR__ . '/../Views/home/index.php';
+            $template = __DIR__ . '/../Views/home/_gsap_homepage.tpl';
+            $backup   = $target . '.bak';
+            if (!file_exists($template)) {
+                echo json_encode(array('ok'=>false,'message'=>'Template không tồn tại')); return;
+            }
+            // backup current index.php then copy template
+            if (file_exists($target)) copy($target, $backup);
+            if (!copy($template, $target)) {
+                echo json_encode(array('ok'=>false,'message'=>'Không ghi được file index.php — kiểm tra quyền thư mục')); return;
+            }
+            echo json_encode(array('ok'=>true,'message'=>'Trang chủ đã được cập nhật! Ảnh sẽ tự động cập nhật khi bạn thay đổi assets.'));
+            return;
+        }
+
+        // ── rollback-homepage ─────────────────────────────────
+        if ($action === 'rollback-homepage') {
+            $target = __DIR__ . '/../Views/home/index.php';
+            $backup = $target . '.bak';
+            if (!file_exists($backup)) { echo json_encode(array('ok'=>false,'message'=>'Không tìm thấy file backup')); return; }
+            if (!copy($backup, $target)) { echo json_encode(array('ok'=>false,'message'=>'Không thể khôi phục — kiểm tra quyền thư mục')); return; }
+            echo json_encode(array('ok'=>true,'message'=>'Đã khôi phục trang chủ cũ'));
+            return;
+        }
+
+        echo json_encode(array('ok'=>false,'message'=>'Unknown admin action'));
+    }
+
+    // ── Public Product Listing (for homepage AJAX) ─────────────
+    public function products($p = null) {
+        $pm = new ProductModel();
+
+        $filters = array(
+            'search'   => trim($_GET['q']   ?? ''),
+            'category' => trim($_GET['cat'] ?? ''),
+            'sort'     => trim($_GET['sort'] ?? 'newest'),
+            'min_price'=> (float)($_GET['min'] ?? 0) > 0 ? (float)$_GET['min'] : '',
+            'max_price'=> (float)($_GET['max'] ?? 0) > 0 ? (float)$_GET['max'] : '',
+        );
+        if (!empty($_GET['is_new']))      $filters['is_new']      = true;
+        if (!empty($_GET['is_featured'])) $filters['is_featured'] = true;
+
+        $page  = max(1, (int)($_GET['page'] ?? 1));
+        $limit = min(48, max(8, (int)($_GET['limit'] ?? 20)));
+        $total = $pm->countAll($filters);
+        $items = $pm->getAll($filters, $page, $limit);
+
+        $out = array();
+        foreach ($items as $row) {
+            $sale = !empty($row['sale_price']) && (float)$row['sale_price'] > 0 && (float)$row['sale_price'] < (float)$row['price'];
+            $disc = $sale ? round((1 - (float)$row['sale_price'] / (float)$row['price']) * 100) : 0;
+            $out[] = array(
+                'id'          => (int)$row['id'],
+                'name'        => $row['name'],
+                'slug'        => $row['slug'],
+                'image'       => $row['image'] ?? '',
+                'brand'       => $row['brand_name'] ?? '',
+                'price'       => (float)$row['price'],
+                'sale_price'  => $sale ? (float)$row['sale_price'] : null,
+                'final_price' => (float)$row['final_price'],
+                'discount_pct'=> $disc,
+                'is_new'      => (bool)$row['is_new'],
+                'is_featured' => (bool)$row['is_featured'],
+                'stock'       => (int)($row['stock'] ?? 0),
+                'rating'      => (float)($row['rating'] ?? 0),
+                'review_count'=> (int)($row['review_count'] ?? 0),
+                'category_id' => (int)$row['category_id'],
+                'category_name'=> $row['category_name'] ?? '',
+            );
+        }
+
+        echo json_encode(array(
+            'success' => true,
+            'total'   => $total,
+            'page'    => $page,
+            'pages'   => (int)ceil($total / $limit),
+            'products'=> $out,
+        ));
+    }
+
+    // ── CHAT: tư vấn AI cho khách hàng ───────────────────────────────
+    public function chat($p = null) {
+        $b       = json_decode(file_get_contents('php://input'), true) ?? array();
+        $message = trim($b['message'] ?? '');
+        $history = is_array($b['history'] ?? null) ? array_slice($b['history'], -6) : array();
+
+        if (!$message) { echo json_encode(array('ok'=>false,'reply'=>'Tin nhắn trống')); return; }
+
+        $apiKey = defined('AI_API_KEY') ? AI_API_KEY : '';
+        if (!$apiKey) { echo json_encode(array('ok'=>false,'reply'=>'Dịch vụ AI chưa sẵn sàng, vui lòng liên hệ hotline.')); return; }
+
+        $db = Database::getInstance();
+
+        // Danh mục
+        $cats    = $db->fetchAll("SELECT name FROM categories WHERE is_active=1 ORDER BY sort_order LIMIT 12");
+        $catList = implode(', ', array_column($cats, 'name'));
+
+        // Thống kê nhanh
+        $stats = $db->fetch("SELECT COUNT(*) AS cnt, MIN(price) AS mn, MAX(price) AS mx FROM products WHERE is_active=1 AND is_deleted=0");
+
+        // Tìm sản phẩm liên quan đến tin nhắn
+        $kw    = '%' . $message . '%';
+        $prods = $db->fetchAll(
+            "SELECT p.name, p.slug, p.price, p.stock, p.short_desc, p.image, c.name AS cat
+             FROM products p LEFT JOIN categories c ON c.id=p.category_id
+             WHERE p.is_active=1 AND p.is_deleted=0
+               AND (p.name LIKE ? OR p.short_desc LIKE ? OR p.description LIKE ?)
+             ORDER BY p.stock DESC LIMIT 6",
+            array($kw, $kw, $kw)
+        );
+
+        // Fallback: sản phẩm bán chạy
+        if (empty($prods)) {
+            $prods = $db->fetchAll(
+                "SELECT p.name, p.slug, p.price, p.stock, p.short_desc, p.image, c.name AS cat
+                 FROM products p
+                 LEFT JOIN categories c ON c.id=p.category_id
+                 LEFT JOIN order_details od ON od.product_id=p.id
+                 WHERE p.is_active=1 AND p.is_deleted=0
+                 GROUP BY p.id ORDER BY COUNT(od.id) DESC LIMIT 6"
+            );
+        }
+
+        $uploadUrl = defined('UPLOAD_URL') ? UPLOAD_URL : '';
+        $appUrl    = defined('APP_URL')    ? APP_URL    : '';
+
+        // Cards trả về frontend
+        $cards = array();
+        foreach ($prods as $pr) {
+            $cards[] = array(
+                'name'  => $pr['name'],
+                'slug'  => $pr['slug'],
+                'price' => (float)$pr['price'],
+                'stock' => (int)$pr['stock'],
+                'image' => !empty($pr['image']) ? $uploadUrl . '/' . $pr['image'] : '',
+                'url'   => $appUrl . '/products/detail/' . $pr['slug'],
+            );
+        }
+
+        $prodTxt = '';
+        foreach ($prods as $pr) {
+            $prodTxt .= '- ' . $pr['name'];
+            if (!empty($pr['cat'])) $prodTxt .= ' [' . $pr['cat'] . ']';
+            $prodTxt .= ': ' . number_format((float)$pr['price'], 0, ',', '.') . 'đ';
+            $prodTxt .= ' (kho: ' . $pr['stock'] . ')';
+            if (!empty($pr['short_desc'])) $prodTxt .= ' — ' . mb_substr($pr['short_desc'], 0, 70, 'UTF-8');
+            $prodTxt .= "\n";
+        }
+
+        $appName = defined('APP_NAME') ? APP_NAME : 'Tuấn Huy Computer';
+
+        $sys = "Bạn là trợ lý tư vấn bán hàng của {$appName} — cửa hàng máy tính tại TP.HCM.\n"
+             . "Danh mục: {$catList}.\n"
+             . "Tổng " . ($stats['cnt'] ?? 0) . " sản phẩm, giá từ " . number_format((float)($stats['mn']??0),0,',','.') . "đ đến " . number_format((float)($stats['mx']??0),0,',','.') . "đ.\n"
+             . "Sản phẩm liên quan:\n{$prodTxt}"
+             . "Chính sách: BH chính hãng 12–36 tháng, đổi trả 30 ngày, giao toàn quốc 24h, COD/Bank/MoMo/VNPay.\n"
+             . "Hướng dẫn: Trả lời bằng tiếng Việt, thân thiện, ngắn gọn rõ ràng (tối đa 5 dòng). "
+             . "Gợi ý sản phẩm cụ thể kèm giá nếu phù hợp. Không bịa thông tin ngoài dữ liệu có sẵn. "
+             . "Khi khách muốn mua, hướng dẫn vào {$appUrl}/products để xem thêm.";
+
+        $msgs = array(array('role'=>'system','content'=>$sys));
+        foreach ($history as $h) {
+            $role = ($h['role'] ?? '') === 'assistant' ? 'assistant' : 'user';
+            if (!empty($h['content'])) {
+                $msgs[] = array('role'=>$role, 'content'=>mb_substr(trim($h['content']), 0, 300, 'UTF-8'));
+            }
+        }
+        $msgs[] = array('role'=>'user','content'=>$message);
+
+        $ch = curl_init('https://api.groq.com/openai/v1/chat/completions');
+        curl_setopt_array($ch, array(
+            CURLOPT_POST           => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 20,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_HTTPHEADER     => array(
+                'Authorization: Bearer ' . $apiKey,
+                'Content-Type: application/json',
+            ),
+            CURLOPT_POSTFIELDS => json_encode(array(
+                'model'       => 'llama-3.3-70b-versatile',
+                'messages'    => $msgs,
+                'max_tokens'  => 450,
+                'temperature' => 0.5,
+            )),
+        ));
+        $res = curl_exec($ch);
+        curl_close($ch);
+
+        $data  = $res ? json_decode($res, true) : null;
+        $reply = trim($data['choices'][0]['message']['content'] ?? '');
+
+        if (!$reply) {
+            echo json_encode(array('ok'=>false,'reply'=>'Xin lỗi, hiện tại AI không phản hồi. Vui lòng gọi hotline 0909 999 888.'));
+            return;
+        }
+
+        // Chỉ đính kèm card nếu câu trả lời nhắc đến sản phẩm (tiết kiệm render)
+        $hasProducts = !empty($cards) && (
+            stripos($reply, 'sản phẩm') !== false ||
+            stripos($reply, 'giá') !== false ||
+            stripos($reply, 'gợi ý') !== false ||
+            stripos($reply, 'recommend') !== false ||
+            stripos($reply, $prods[0]['name'] ?? '~~~') !== false
+        );
+
+        echo json_encode(array(
+            'ok'       => true,
+            'reply'    => $reply,
+            'products' => $hasProducts ? $cards : array(),
+        ));
+    }
+
 }

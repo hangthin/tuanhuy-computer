@@ -110,7 +110,7 @@
           </div>
           <div class="field-wrap">
             <label>Email</label>
-            <input type="email" value="<?= htmlspecialchars($user['email']??'') ?>" readonly>
+            <input type="email" name="email" value="<?= htmlspecialchars($user['email']??'') ?>" placeholder="example@gmail.com">
           </div>
         </div>
         <div class="field-group">
@@ -139,41 +139,170 @@
       </form>
     </div>
 
-    <!-- Đổi mật khẩu -->
+    <!-- Đổi mật khẩu (OTP) -->
     <div class="acc-card">
-      <div class="acc-card-title"><i class="fa-solid fa-lock"></i>Đổi mật khẩu</div>
-      <form method="POST" action="<?= APP_URL ?>/account/change-password" onsubmit="return accValidatePw(this)">
-        <div class="field-group">
-          <div class="field-wrap">
-            <label>Mật khẩu hiện tại</label>
-            <input type="password" name="current_password" placeholder="••••••••" autocomplete="current-password">
-          </div>
-          <div class="field-wrap" style="grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
-            <div>
-              <label>Mật khẩu mới</label>
-              <input type="password" name="new_password" id="acc-pw-new" placeholder="Tối thiểu 6 ký tự" autocomplete="new-password">
-            </div>
-            <div>
-              <label>Nhập lại mật khẩu mới</label>
-              <input type="password" name="confirm_password" id="acc-pw-cf" placeholder="Nhập lại" autocomplete="new-password">
-            </div>
-          </div>
+      <div class="acc-card-title"><i class="fa-solid fa-shield-halved"></i>Đổi mật khẩu</div>
+
+      <!-- Bước 1: Gửi OTP -->
+      <div id="cpw-step1">
+        <p style="font-size:.84rem;color:#666;margin-bottom:1rem">
+          Mã OTP sẽ gửi đến email:<br>
+          <strong style="color:var(--red)"><?= htmlspecialchars($user['email']??'') ?></strong>
+        </p>
+        <div id="cpw-err1" style="display:none;background:#fee2e2;border:1px solid #fecaca;padding:.55rem .8rem;border-radius:7px;font-size:.82rem;color:#991b1b;margin-bottom:.85rem"></div>
+        <button id="cpw-send-btn" onclick="cpwSend()" class="save-btn" style="background:#1d4ed8">
+          <i class="fa-solid fa-envelope"></i>Gửi mã OTP
+        </button>
+      </div>
+
+      <!-- Bước 2: Nhập OTP + mật khẩu mới (ẩn ban đầu) -->
+      <div id="cpw-step2" style="display:none">
+        <div style="display:flex;align-items:center;gap:.6rem;padding:.65rem .9rem;background:#eff6ff;border:1px solid #bfdbfe;border-radius:9px;margin-bottom:1.1rem;font-size:.82rem;color:#1e40af">
+          <i class="fa-solid fa-circle-check" style="color:#3b82f6;flex-shrink:0"></i>
+          <span>OTP đã gửi đến <strong><?= htmlspecialchars($user['email']??'') ?></strong>
+            — hết hạn sau <strong id="cpw-countdown" style="color:#ef4444"></strong></span>
         </div>
-        <div id="acc-pw-err" style="display:none;color:#ef4444;font-size:.78rem;margin-bottom:.5rem"></div>
-        <button type="submit" class="save-btn" style="background:#1d4ed8"><i class="fa-solid fa-key"></i>Đổi mật khẩu</button>
-      </form>
+
+        <form method="POST" action="<?= APP_URL ?>/account/verify-change-password" onsubmit="return cpwValidate(this)">
+          <!-- OTP boxes -->
+          <div class="field-wrap" style="margin-bottom:1rem">
+            <label>Mã OTP (6 chữ số)</label>
+            <div style="display:flex;gap:.4rem;margin-top:.3rem" id="cpw-otp-boxes">
+              <?php for($i=0;$i<6;$i++): ?>
+              <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]"
+                     class="cpw-otp-box"
+                     style="width:42px;height:50px;text-align:center;font-size:1.35rem;font-weight:800;border:2px solid var(--border);border-radius:8px;outline:none;font-family:monospace;color:#111;transition:border-color .15s;background:#fafafa"
+                     oninput="cpwOtpInput(this,<?= $i ?>)"
+                     onkeydown="cpwOtpKeydown(event,this,<?= $i ?>)"
+                     onpaste="cpwOtpPaste(event,<?= $i ?>)">
+              <?php endfor; ?>
+            </div>
+            <input type="hidden" name="otp" id="cpw-otp-val">
+          </div>
+
+          <div class="field-group">
+            <div class="field-wrap">
+              <label>Mật khẩu mới</label>
+              <input type="password" name="new_password" id="cpw-pw-new" placeholder="Tối thiểu 6 ký tự" autocomplete="new-password">
+            </div>
+            <div class="field-wrap">
+              <label>Nhập lại mật khẩu mới</label>
+              <input type="password" name="confirm_password" id="cpw-pw-cf" placeholder="Nhập lại" autocomplete="new-password">
+            </div>
+          </div>
+
+          <div id="cpw-err2" style="display:none;background:#fee2e2;border:1px solid #fecaca;padding:.55rem .8rem;border-radius:7px;font-size:.82rem;color:#991b1b;margin-bottom:.85rem"></div>
+
+          <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+            <button type="submit" class="save-btn" style="background:#1d4ed8"><i class="fa-solid fa-key"></i>Đổi mật khẩu</button>
+            <button type="button" id="cpw-resend-btn" onclick="cpwResend()" style="background:none;border:none;font-size:.78rem;color:var(--red);font-weight:700;cursor:pointer;padding:0">
+              Gửi lại OTP <span id="cpw-resend-wait" style="color:#aaa"></span>
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
 
   </div>
 </div>
 
 <script>
-function accValidatePw(f){
-  var n=document.getElementById('acc-pw-new').value;
-  var c=document.getElementById('acc-pw-cf').value;
-  var err=document.getElementById('acc-pw-err');
-  if(n.length>0&&n.length<6){err.textContent='Mật khẩu mới ít nhất 6 ký tự';err.style.display='block';return false;}
-  if(n!==c){err.textContent='Mật khẩu nhập lại không khớp';err.style.display='block';return false;}
+var cpwTimer=null,cpwResendTimer=null;
+var APP_URL='<?= APP_URL ?>';
+
+function cpwSend(){
+  var btn=document.getElementById('cpw-send-btn');
+  var err=document.getElementById('cpw-err1');
+  err.style.display='none';
+  btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Đang gửi...';
+  fetch(APP_URL+'/account/send-change-otp',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-envelope"></i>Gửi mã OTP';
+    if(d.success){
+      document.getElementById('cpw-step1').style.display='none';
+      document.getElementById('cpw-step2').style.display='block';
+      document.querySelectorAll('.cpw-otp-box')[0].focus();
+      cpwStartCountdown(600);cpwStartResendWait(60);
+    } else {
+      err.textContent=d.message||'Có lỗi xảy ra';err.style.display='block';
+    }
+  })
+  .catch(function(){
+    btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-envelope"></i>Gửi mã OTP';
+    err.textContent='Lỗi kết nối, vui lòng thử lại';err.style.display='block';
+  });
+}
+
+function cpwResend(){
+  var btn=document.getElementById('cpw-resend-btn');
+  btn.disabled=true;
+  fetch(APP_URL+'/account/send-change-otp',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    btn.disabled=false;
+    if(d.success){cpwStartCountdown(600);cpwStartResendWait(60);}
+    else{document.getElementById('cpw-err2').textContent=d.message||'Có lỗi';document.getElementById('cpw-err2').style.display='block';}
+  })
+  .catch(function(){btn.disabled=false;});
+}
+
+function cpwStartCountdown(secs){
+  clearInterval(cpwTimer);
+  var el=document.getElementById('cpw-countdown');
+  function tick(){
+    if(secs<=0){el.textContent='hết hạn';el.style.color='#ef4444';clearInterval(cpwTimer);return;}
+    var m=Math.floor(secs/60);var s=secs%60;
+    el.textContent=m+':'+(s<10?'0':'')+s;secs--;
+  }
+  tick();cpwTimer=setInterval(tick,1000);
+}
+
+function cpwStartResendWait(secs){
+  clearInterval(cpwResendTimer);
+  var btn=document.getElementById('cpw-resend-btn');
+  var wait=document.getElementById('cpw-resend-wait');
+  btn.disabled=true;
+  function tick(){
+    if(secs<=0){btn.disabled=false;wait.textContent='';clearInterval(cpwResendTimer);return;}
+    wait.textContent='('+secs+'s)';secs--;
+  }
+  tick();cpwResendTimer=setInterval(tick,1000);
+}
+
+function cpwOtpInput(el,idx){
+  el.value=el.value.replace(/[^0-9]/g,'');
+  var boxes=document.querySelectorAll('.cpw-otp-box');
+  if(el.value&&idx<5) boxes[idx+1].focus();
+  cpwCollect();
+  el.style.borderColor=el.value?'var(--red)':'var(--border)';
+}
+function cpwOtpKeydown(e,el,idx){
+  var boxes=document.querySelectorAll('.cpw-otp-box');
+  if(e.key==='Backspace'&&!el.value&&idx>0){boxes[idx-1].focus();boxes[idx-1].value='';cpwCollect();}
+  if(e.key==='ArrowLeft'&&idx>0) boxes[idx-1].focus();
+  if(e.key==='ArrowRight'&&idx<5) boxes[idx+1].focus();
+}
+function cpwOtpPaste(e,idx){
+  e.preventDefault();
+  var txt=(e.clipboardData||window.clipboardData).getData('text').replace(/[^0-9]/g,'').slice(0,6);
+  var boxes=document.querySelectorAll('.cpw-otp-box');
+  for(var i=0;i<txt.length&&i+idx<6;i++){boxes[i+idx].value=txt[i];boxes[i+idx].style.borderColor='var(--red)';}
+  if(idx+txt.length<=5) boxes[idx+txt.length].focus();
+  cpwCollect();
+}
+function cpwCollect(){
+  var val='';document.querySelectorAll('.cpw-otp-box').forEach(function(b){val+=b.value;});
+  document.getElementById('cpw-otp-val').value=val;
+}
+function cpwValidate(f){
+  var otp=document.getElementById('cpw-otp-val').value;
+  var pw=document.getElementById('cpw-pw-new').value;
+  var cf=document.getElementById('cpw-pw-cf').value;
+  var err=document.getElementById('cpw-err2');
+  if(otp.length!==6){err.textContent='Vui lòng nhập đủ 6 số OTP';err.style.display='block';return false;}
+  if(pw.length<6){err.textContent='Mật khẩu mới ít nhất 6 ký tự';err.style.display='block';return false;}
+  if(pw!==cf){err.textContent='Mật khẩu nhập lại không khớp';err.style.display='block';return false;}
   err.style.display='none';return true;
 }
 </script>
