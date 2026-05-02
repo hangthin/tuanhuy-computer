@@ -18,7 +18,7 @@ define('APP_NAME',       'Tuấn Huy Computer');
 define('UPLOAD_PATH',    __DIR__ . '/../uploads/products/');
 define('UPLOAD_URL',     APP_URL . '/uploads/products/');
 define('ITEMS_PER_PAGE', 12);
-define('AI_API_KEY',       getenv('AI_API_KEY')       ?: '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');
+define('AI_API_KEY',       getenv('AI_API_KEY')       ?: '');
 define('ANTHROPIC_API_KEY', getenv('ANTHROPIC_API_KEY') ?: '');
 define('AI_ACCOUNT_ID',   '');
 define('AI_MODEL', 'llama-3.2-11b-vision-preview');

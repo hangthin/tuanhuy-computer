@@ -345,6 +345,21 @@ class TelegramBotController {
             return array('ok' => true, 'action' => $forced['action'], 'reply' => $reply, 'steps' => $forced['steps'] ?? array());
         }
 
+        // Lightweight OpenRouter intent detection (skips heavy callAI for simple commands)
+        $intent = $this->detectIntent($text);
+        if ($intent && $intent['action'] !== 'chat') {
+            $this->debugLog("processMessageWeb detectIntent action=" . $intent['action']);
+            $this->executeAction(array(
+                'action'           => $intent['action'],
+                'params'           => $intent['params'] ?? array(),
+                'reply_vn'         => '',
+                'requires_confirm' => false,
+                'steps'            => array(),
+            ), null);
+            $reply = strip_tags(implode("\n\n", array_filter($this->webOutput)));
+            return array('ok' => true, 'action' => $intent['action'], 'reply' => $reply ?: 'Hoàn thành.', 'steps' => array());
+        }
+
         $context = $this->buildContext();
         $aiJson  = $this->callAI($text, $context);
         $this->debugLog("processMessageWeb AI action=" . ($aiJson['action'] ?? 'null'));
@@ -432,6 +447,20 @@ class TelegramBotController {
             if ($forced) {
                 $this->debugLog("preClassify matched action=" . $forced['action']);
                 $this->executeAction($forced, $chatId);
+                $replySent = true;
+                return;
+            }
+
+            // Lightweight OpenRouter intent detection
+            $intent = $this->detectIntent($text);
+            if ($intent && $intent['action'] !== 'chat') {
+                $this->debugLog("detectIntent action=" . $intent['action']);
+                $this->executeAction(array(
+                    'action'           => $intent['action'],
+                    'params'           => $intent['params'] ?? array(),
+                    'reply_vn'         => '',
+                    'requires_confirm' => false,
+                ), $chatId);
                 $replySent = true;
                 return;
             }
@@ -663,6 +692,7 @@ class TelegramBotController {
         switch ($type) {
             case 'ai_insight':      $this->execAiInsight($params, $chatId, $reply);      break;
             case 'report':          $this->execReport($params, $chatId, $reply);         break;
+            case 'orders':          $this->execOrders($params, $chatId, $reply);         break;
             case 'find_images':     $this->execFindImages($params, $chatId, $reply);     break;
             case 'remove_bg':       $this->execRemoveBg($params, $chatId, $reply);       break;
             case 'fill_specs':      $this->execFillSpecs($params, $chatId, $reply);      break;
@@ -735,6 +765,60 @@ class TelegramBotController {
         } catch (Exception $e) {
             $this->debugLog("execReport EXCEPTION: " . $e->getMessage());
             $this->out($chatId, '❌ Lỗi báo cáo: ' . $e->getMessage());
+        }
+    }
+
+    // ── EXECUTOR: orders ─────────────────────────────────────────────
+    private function execOrders($params, $chatId, $aiReply) {
+        try {
+            $limit  = max(1, min((int)($params['limit'] ?? 5), 20));
+            $status = $params['status'] ?? 'all';
+            $db     = $this->db;
+
+            $validStatuses = array('pending','confirmed','processing','shipping','delivered','cancelled');
+            $where = "is_deleted=0";
+            if ($status !== 'all' && in_array($status, $validStatuses)) {
+                $where .= " AND status=?";
+                $rows = $db->fetchAll(
+                    "SELECT id, order_code, fullname, total, status, created_at
+                     FROM orders WHERE {$where} ORDER BY created_at DESC LIMIT {$limit}",
+                    array($status)
+                );
+            } else {
+                $rows = $db->fetchAll(
+                    "SELECT id, order_code, fullname, total, status, created_at
+                     FROM orders WHERE {$where} ORDER BY created_at DESC LIMIT {$limit}"
+                );
+            }
+
+            if (!$rows) {
+                $label = $status !== 'all' ? " trạng thái <b>{$status}</b>" : '';
+                $this->out($chatId, "📭 Không có đơn hàng{$label}.");
+                return;
+            }
+
+            $statusMap = array(
+                'pending'    => '⏳ Chờ xác nhận',
+                'confirmed'  => '✅ Đã xác nhận',
+                'processing' => '🔧 Đang xử lý',
+                'shipping'   => '🚚 Đang giao',
+                'delivered'  => '✔️ Hoàn thành',
+                'cancelled'  => '❌ Đã hủy',
+            );
+
+            $title = $status !== 'all' ? ($statusMap[$status] ?? $status) : 'mới nhất';
+            $msg   = "🛒 <b>Đơn hàng {$title}</b>\n\n";
+            foreach ($rows as $r) {
+                $s    = $statusMap[$r['status']] ?? $r['status'];
+                $code = htmlspecialchars($r['order_code'] ?: '#' . $r['id'], ENT_QUOTES, 'UTF-8');
+                $name = htmlspecialchars(mb_substr($r['fullname'] ?? 'Khách', 0, 20, 'UTF-8'), ENT_QUOTES, 'UTF-8');
+                $time = date('H:i d/m', strtotime($r['created_at']));
+                $msg .= "<code>{$code}</code> {$name}\n"
+                      . "💰 " . number_format((float)$r['total'], 0, ',', '.') . "đ · {$s} · {$time}\n\n";
+            }
+            $this->out($chatId, rtrim($msg));
+        } catch (Exception $e) {
+            $this->out($chatId, '❌ Lỗi đơn hàng: ' . $e->getMessage());
         }
     }
 
@@ -1302,6 +1386,72 @@ class TelegramBotController {
     }
 
     // ── Pre-classifier: bypass AI for unambiguous commands ────────────
+    // ── OpenRouter intent detection (lightweight, fast) ──────────────
+    private function detectIntent($text) {
+        $apiKey = defined('AI_API_KEY') ? AI_API_KEY : '';
+        if (!$apiKey) return null;
+
+        $sys = 'Bạn là trợ lý phân tích lệnh cho shop Tuấn Huy Computer.
+Phân tích tin nhắn tiếng Việt (có dấu hoặc không dấu) và trả về JSON:
+{"action": string, "params": object}
+
+Actions:
+- report: báo cáo doanh thu (params: {period: today/week/month})
+- orders: xem danh sách đơn hàng (params: {limit: 5, status: all/pending/confirmed/shipping/delivered})
+- order_detail: xem chi tiết 1 đơn (params: {id: number})
+- products: xem sản phẩm (params: {limit: 5, filter: low_stock/out_of_stock/all})
+- customers: xem khách hàng (params: {limit: 5})
+- stats: thống kê tổng quan
+- chat: trò chuyện thông thường
+
+Ví dụ:
+"đơn hàng mới nhất" → {"action":"orders","params":{"limit":5,"status":"all"}}
+"báo cáo hôm nay" → {"action":"report","params":{"period":"today"}}
+"đơn đang giao" → {"action":"orders","params":{"limit":10,"status":"shipping"}}
+"sản phẩm hết hàng" → {"action":"products","params":{"filter":"out_of_stock"}}
+"hôm nay có mấy đơn" → {"action":"report","params":{"period":"today"}}
+Chỉ trả về JSON, không giải thích.';
+
+        $ch = curl_init('https://api.groq.com/openai/v1/chat/completions');
+        curl_setopt_array($ch, array(
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => json_encode(array(
+                'model'           => 'llama-3.3-70b-versatile',
+                'messages'        => array(
+                    array('role' => 'system', 'content' => $sys),
+                    array('role' => 'user',   'content' => $text),
+                ),
+                'max_tokens'      => 80,
+                'temperature'     => 0,
+                'response_format' => array('type' => 'json_object'),
+            )),
+            CURLOPT_HTTPHEADER     => array(
+                'Authorization: Bearer ' . $apiKey,
+                'Content-Type: application/json',
+            ),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 6,
+            CURLOPT_SSL_VERIFYPEER => false,
+        ));
+        $res  = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($code !== 200) {
+            $this->debugLog("detectIntent HTTP {$code}");
+            return null;
+        }
+        $data    = json_decode($res, true);
+        $content = $data['choices'][0]['message']['content'] ?? '';
+        if (!$content) return null;
+
+        $parsed = json_decode($content, true);
+        if (empty($parsed['action'])) return null;
+
+        $this->debugLog("detectIntent action=" . $parsed['action']);
+        return $parsed;
+    }
+
     private function preClassify($text) {
         $t = trim(mb_strtolower($text, 'UTF-8'));
 
