@@ -6,7 +6,7 @@ class SearchController {
         $q=trim(isset($_GET['q'])?$_GET['q']:'');
         $pm=new ProductModel();$categories=(new CategoryModel())->getAll();
         $page=max(1,(int)(isset($_GET['page'])?$_GET['page']:1));
-        $filters=array('search'=>$q,'sort'=>isset($_GET['sort'])?$_GET['sort']:'newest');
+        $filters=array('search'=>$q,'sort'=>isset($_GET['sort'])?$_GET['sort']:'newest','brand'=>isset($_GET['brand'])?(int)$_GET['brand']:0,'min_price'=>isset($_GET['min_price'])?$_GET['min_price']:'','max_price'=>isset($_GET['max_price'])?$_GET['max_price']:'','is_new'=>!empty($_GET['is_new']),'is_featured'=>!empty($_GET['is_featured']));
         $products=$pm->getAll($filters,$page,ITEMS_PER_PAGE);
         $total=$pm->countAll($filters);$totalPages=(int)ceil($total/ITEMS_PER_PAGE);
         $pageTitle='Tìm kiếm: '.htmlspecialchars($q);$categorySlug=null;$category=null;
