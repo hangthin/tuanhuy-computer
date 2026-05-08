@@ -320,6 +320,52 @@ Nhóm endpoint: `auth`, `cart`, `coupon`, `review`, `ai` (generate, save-image, 
 
 ---
 
+## 🌐 Server & Deployment Info
+
+| Thông tin | Giá trị |
+|---|---|
+| Live URL | http://98.92.254.137 |
+| Cloud | AWS EC2 |
+| OS | Amazon Linux 2023 |
+| IP | 98.92.254.137 |
+| Web server | Apache httpd |
+| PHP timezone | Asia/Ho_Chi_Minh |
+| Database | MariaDB |
+| DB name | `mpc` |
+| DB password | *(xem `/root/db_credentials.txt` trên server)* |
+| Deploy path | `/var/www/html/` |
+| SSH | `ssh -i key.pem ec2-user@98.92.254.137` |
+
+### Cloudflare Tunnel (Telegram Webhook)
+
+Tunnel dùng Cloudflare trycloudflare — URL thay đổi mỗi lần restart server.
+
+**Lấy URL tunnel mới sau khi restart:**
+
+```bash
+sudo journalctl -u cloudflared --no-pager | grep trycloudflare | tail -3
+```
+
+**Đặt lại webhook cho Telegram bot:**
+
+```bash
+curl "https://api.telegram.org/bot{TOKEN}/setWebhook?url=https://{TUNNEL_URL}/telegram/webhook"
+```
+
+### Checklist sau khi restart server
+
+1. Lấy tunnel URL mới (lệnh `journalctl` ở trên)
+2. Đặt lại Telegram webhook với URL mới
+3. Kiểm tra Apache đang chạy:
+
+```bash
+sudo systemctl status httpd
+# Nếu chưa chạy:
+sudo systemctl start httpd
+```
+
+---
+
 ## Giấy phép
 
 Dự án nội bộ — Tuấn Huy Computer.
