@@ -1,5 +1,10 @@
 # Tuấn Huy Computer
 
+![PHP](https://img.shields.io/badge/PHP-8.1-777BB4?logo=php&logoColor=white)
+![MySQL](https://img.shields.io/badge/MariaDB-MySQL-4479A1?logo=mysql&logoColor=white)
+![AWS](https://img.shields.io/badge/AWS-EC2-FF9900?logo=amazonaws&logoColor=white)
+![Apache](https://img.shields.io/badge/Apache-httpd-D22128?logo=apache&logoColor=white)
+
 Website thương mại điện tử bán linh kiện máy tính, xây dựng bằng PHP thuần + MySQL. Không dùng framework, không Composer, không npm.
 
 **Local:** `http://localhost/tuanhuy_computer`  
@@ -82,7 +87,7 @@ APP_URL=http://localhost/tuanhuy_computer
 DB_HOST=localhost
 DB_NAME=mpc
 DB_USER=root
-DB_PASS=
+DB_PASS=your_db_password
 
 AI_API_KEY=gsk_...          # Groq API key
 MAIL_USER=you@gmail.com
@@ -128,7 +133,7 @@ TELEGRAM_ADMIN_CHAT=7329986368
 
 ```bash
 # Trên máy local — copy project lên server
-scp -i key.pem -r . ubuntu@<EC2_IP>:/var/www/html/tuanhuy_computer
+scp -i key.pem -r . ec2-user@98.92.254.137:/var/www/html/tuanhuy_computer
 
 # Trên server
 cd /var/www/html/tuanhuy_computer
