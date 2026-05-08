@@ -216,23 +216,83 @@ Mọi request đều qua `index.php` (via `.htaccess`).
 
 ---
 
-## Tài khoản mặc định
+## Đăng nhập Admin
+
+1. Truy cập `http://localhost/tuanhuy_computer/auth/login` (hoặc nhấn **Đăng nhập** trên header)
+2. Đăng nhập bằng tài khoản Admin:
 
 | Role | Email | Mật khẩu |
 |---|---|---|
 | Admin | admin@tuanhuycomputer.com | `admin123` |
 
-> Đổi mật khẩu ngay sau khi deploy lần đầu.
+3. Sau khi đăng nhập, vào trang quản trị tại: `/admin`
+
+> **Quan trọng:** Đổi mật khẩu ngay sau khi deploy lần đầu tại `/admin/staff`.
+
+---
+
+## Các trang Admin
+
+| URL | Chức năng |
+|---|---|
+| `/admin` | Dashboard — doanh thu, đơn hàng mới, sản phẩm bán chạy, biểu đồ |
+| `/admin/products` | Danh sách sản phẩm — tìm kiếm, lọc theo danh mục/trạng thái |
+| `/admin/products/create` | Thêm sản phẩm mới (form + AI hỗ trợ) |
+| `/admin/categories` | Quản lý danh mục, thêm/sửa/xóa |
+| `/admin/orders` | Danh sách đơn hàng, lọc theo trạng thái |
+| `/admin/orders/view/{id}` | Chi tiết đơn hàng, cập nhật trạng thái, in PDF |
+| `/admin/customers` | Danh sách khách hàng, thống kê chi tiêu, lọc theo trạng thái |
+| `/admin/inventory` | Quản lý tồn kho — nhập hàng, điều chỉnh số lượng |
+| `/admin/staff` | Quản lý nhân sự (Admin only) — tạo/sửa/khóa tài khoản |
+| `/admin/stats` | Thống kê doanh thu theo ngày/tháng/năm, top sản phẩm |
+| `/admin/logs` | Audit log — lịch sử thao tác toàn bộ hệ thống |
+| `/admin/ai/generator` | AI Generator — tạo tên/mô tả sản phẩm, tìm ảnh, xóa nền |
+| `/admin/ai/assistant` | AI Assistant — chatbot hỗ trợ nghiệp vụ |
+| `/admin/ai/report` | Báo cáo AI — phân tích sản phẩm, đề xuất giá |
+| `/admin/assets` | Quản lý banner trang chủ và ảnh showcase |
+| `/admin/telegram-bot` | Cấu hình Telegram bot, test gửi thông báo |
 
 ---
 
 ## Phân quyền
 
-| Role | Giá trị | Quyền |
+| Role | Giá trị | Quyền chi tiết |
 |---|---|---|
-| Admin | 1 | Toàn quyền |
-| Manager | 2 | Tạo + sửa tất cả; không xóa |
-| Staff | 3 | Tạo/sửa sản phẩm trong vòng 15 phút sau khi tạo |
+| Admin | 1 | Toàn quyền — bao gồm xóa, quản lý nhân sự, xem logs |
+| Manager | 2 | Tạo + sửa tất cả (sản phẩm, đơn hàng, danh mục, tồn kho); **không xóa** |
+| Staff | 3 | Chỉ tạo/sửa **sản phẩm** trong vòng **15 phút** sau khi tạo |
+
+**Bảng so sánh chi tiết:**
+
+| Chức năng | Admin | Manager | Staff |
+|---|:---:|:---:|:---:|
+| Xem dashboard | ✓ | ✓ | ✓ |
+| Thêm sản phẩm | ✓ | ✓ | ✓ |
+| Sửa sản phẩm | ✓ | ✓ | ✓ (15 phút) |
+| Xóa sản phẩm | ✓ | — | — |
+| Quản lý đơn hàng | ✓ | ✓ | — |
+| Quản lý khách hàng | ✓ | ✓ | — |
+| Quản lý danh mục | ✓ | ✓ | — |
+| Quản lý tồn kho | ✓ | ✓ | — |
+| Xem thống kê | ✓ | ✓ | — |
+| Xem audit logs | ✓ | — | — |
+| Quản lý nhân sự | ✓ | — | — |
+| AI Generator | ✓ | ✓ | ✓ |
+
+### Tạo tài khoản Manager / Staff
+
+Chỉ Admin mới thực hiện được:
+
+1. Vào `/admin/staff`
+2. Nhấn **Thêm nhân sự**
+3. Điền họ tên, email, số điện thoại, mật khẩu (tối thiểu 6 ký tự)
+4. Chọn **Vai trò**: Manager hoặc Staff
+5. Nhấn **Lưu**
+
+Để khóa / mở khóa tài khoản: nhấn nút toggle trên danh sách nhân sự.  
+Để đặt lại mật khẩu: nhấn **Reset mật khẩu** trong form sửa.
+
+> Không thể thay đổi vai trò hoặc tự khóa tài khoản đang đăng nhập.
 
 ---
 
